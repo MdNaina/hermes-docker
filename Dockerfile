@@ -73,6 +73,12 @@ RUN set -eux; \
     if [ -x "${HERMES_VENV}/bin/pip" ]; then \
         "${HERMES_VENV}/bin/pip" install --no-cache-dir 'python-telegram-bot==22.8'; \
         "${HERMES_VENV}/bin/python" -c 'import telegram; print("python-telegram-bot", telegram.__version__)'; \
+        # Slack gateway adapter (Socket Mode) requires slack-bolt + slack-sdk.
+        # Hermes lazy-installs these on first use; baking avoids a runtime pip
+        # call that can fail in restricted-network environments.
+        "${HERMES_VENV}/bin/pip" install --no-cache-dir 'slack-sdk==3.40.1' 'slack-bolt==1.27.0'; \
+        "${HERMES_VENV}/bin/python" -c 'import slack_sdk; print("slack-sdk", slack_sdk.__version__)'; \
+        "${HERMES_VENV}/bin/python" -c 'import slack_bolt; print("slack-bolt", slack_bolt.__version__)'; \
     fi; \
     # Make the baked trees world-readable for the abc user (skip any that the
     # installer layout did not create on this version).

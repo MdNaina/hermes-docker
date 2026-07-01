@@ -192,6 +192,43 @@ TELEGRAM_ALLOWED_USERS=...
 source /defaults/hermes-s6-lib.sh && hermes_start_slot gateway-default
 ```
 
+### Slack (Socket Mode)
+
+The image bakes **`slack-sdk==3.40.1`** and **`slack-bolt==1.27.0`** into the Hermes
+venv at build time so the Slack gateway adapter (Socket Mode) can import without a
+runtime pip install. Set these in `/config/.hermes/.env`:
+
+```bash
+SLACK_BOT_TOKEN=xoxb-...          # Bot User OAuth Token
+SLACK_APP_TOKEN=xapp-...          # App-Level Token (for Socket Mode)
+HERMES_SLACK_ENABLED=true
+```
+
+Then generate and install a Slack app manifest:
+
+```bash
+# Inside the desktop terminal, generate a manifest with all Hermes
+# gateway commands registered as native slash commands:
+hermes slack manifest > /config/slack-manifest.yml
+```
+
+Create a Slack app at https://api.slack.com/apps using this manifest, install it
+to your workspace, copy the tokens into `.env`, and restart the gateway:
+
+```bash
+source /defaults/hermes-s6-lib.sh && hermes_start_slot gateway-default
+```
+
+Verify:
+
+```bash
+hermes gateway status
+# Look for "slack: connected" in the output
+```
+
+**Note:** Socket Mode requires outbound HTTPS from the container to Slack's
+servers — no inbound ports needed. The gateway handles reconnection automatically.
+
 The default Hermes config lives at `root/defaults/hermes/config.yaml` and is seeded
 into `/config/.hermes/config.yaml` on first boot. Edit the seeded file (then
 restart) to tweak toolsets or the `browser.cdp_url`.
