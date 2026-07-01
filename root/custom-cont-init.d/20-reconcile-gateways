@@ -1,0 +1,45 @@
+#!/usr/bin/with-contenv bash
+# Register /run/service/gateway-default for Hermes v0.17+ (hermes gateway start|stop).
+
+set -e
+
+# shellcheck source=/defaults/hermes-s6-lib.sh
+source /defaults/hermes-s6-lib.sh
+
+HERMES_HOME=/config/.hermes
+SCANDIR=/run/service
+SERVICE="${SCANDIR}/gateway-default"
+TEMPLATE=/defaults/gateway-default
+
+mkdir -p "${HERMES_HOME}/logs/gateways/default"
+rm -f "${HERMES_HOME}/gateway.pid" "${HERMES_HOME}/processes.json"
+
+hermes_fix_scandir_perms
+
+# If Hermes is already configured, mark desired state running on each container boot.
+if [ -f "${HERMES_HOME}/.env" ]; then
+    echo '{"gateway_state":"running","desired_state":"running"}' > "${HERMES_HOME}/gateway_state.json"
+    chown abc:abc "${HERMES_HOME}/gateway_state.json"
+fi
+
+tmp="${SCANDIR}/.gateway-default.tmp"
+rm -rf "${tmp}"
+mkdir -p "${tmp}/log"
+cp "${TEMPLATE}/type" "${tmp}/type"
+cp "${TEMPLATE}/run" "${tmp}/run"
+cp "${TEMPLATE}/finish" "${tmp}/finish"
+cp "${TEMPLATE}/log-run" "${tmp}/log/run"
+chmod 755 "${tmp}/run" "${tmp}/finish" "${tmp}/log/run"
+
+hermes_seed_supervise "${tmp}"
+hermes_seed_supervise "${tmp}/log"
+
+# Never write `down` — the run script waits for .env then starts the gateway.
+rm -rf "${SERVICE}"
+mv "${tmp}" "${SERVICE}"
+
+hermes_seed_supervise "${SERVICE}"
+hermes_seed_supervise "${SERVICE}/log"
+chown -R abc:abc "${HERMES_HOME}/logs/gateways" 2>/dev/null || true
+
+echo "[reconcile-gateways] gateway-default registered at ${SERVICE}"

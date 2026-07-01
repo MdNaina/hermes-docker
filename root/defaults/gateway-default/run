@@ -1,0 +1,16 @@
+#!/usr/bin/with-contenv bash
+# Supervised default-profile gateway (Hermes v0.17+ expects /run/service/gateway-default/).
+set -e
+export HERMES_HOME=/config/.hermes
+export HOME=/config
+export PATH="/usr/local/bin:/usr/bin:/bin"
+export HERMES_S6_SUPERVISED_CHILD=1
+
+echo "[gateway-default] waiting for ${HERMES_HOME}/.env (run hermes setup in the desktop) ..."
+while [ ! -f "${HERMES_HOME}/.env" ]; do
+    sleep 5
+done
+echo "[gateway-default] config found, starting gateway"
+
+[ "$(id -u)" = 0 ] || exec hermes gateway run --replace
+exec s6-setuidgid abc hermes gateway run --replace

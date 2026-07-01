@@ -1,0 +1,52 @@
+services:
+  hermes-docker:
+    build: .
+    image: hermes-docker
+    container_name: hermes-docker
+    # Chromium/Brave needs a larger /dev/shm and an unconfined seccomp profile
+    # to run inside Docker (paired with --no-sandbox in autostart).
+    shm_size: "2gb"
+    security_opt:
+      - seccomp:unconfined
+    ports:
+      - "3001:3001"   # Selkies desktop (HTTPS)
+      - "3000:3000"   # Selkies desktop (HTTP, optional)
+      - "8642:8642"   # Hermes gateway (WebUI / messaging)
+      - "9119:9119"   # Hermes web dashboard (when HERMES_DASHBOARD=1)
+    environment:
+      # ---- Selkies web desktop ----
+      - CUSTOM_USER=abc          # HTTP basic-auth username
+      - PASSWORD=changeme        # HTTP basic-auth password (CHANGE ME)
+      - TITLE=Hermes Desktop
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      # ---- X11 / Wayland switch ----
+      # false = X11 (default, widest compatibility, CPU encode)
+      # true  = Wayland (Smithay + Labwc, zero-copy GPU encode; needs AVX2/GPU,
+      #         auto-falls-back to X11 on CPUs without AVX2)
+      - PIXELFLUX_WAYLAND=false
+      # Uncomment to auto-use the first GPU for Wayland encode/render:
+      # - AUTO_GPU=true
+      # ---- Hermes web dashboard (starts after gateway on :8642) ----
+      - HERMES_DASHBOARD=1
+      - HERMES_DASHBOARD_HOST=0.0.0.0
+      - HERMES_DASHBOARD_PORT=9119
+      # Required for 0.0.0.0 bind (non-loopback). Change these — do not use defaults on the public internet.
+      - HERMES_DASHBOARD_BASIC_AUTH_USERNAME=abc
+      - HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=changeme
+    volumes:
+      - ./data:/config
+    restart: unless-stopped
+    # ---- Optional GPU acceleration for Wayland mode ----
+    # Intel / AMD: expose the render node
+    # devices:
+    #   - /dev/dri:/dev/dri
+    # NVIDIA: requires the nvidia container runtime on the host
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [compute, video, graphics, utility]

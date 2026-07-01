@@ -1,0 +1,5 @@
+#!/usr/bin/with-contenv bash
+if [ "$1" = "78" ]; then
+    exit 125
+fi
+exit 0

@@ -1,0 +1,242 @@
+# hermes-docker
+
+A single Docker image that bundles a **web-native Linux desktop**, a **headed Brave**
+browser the **[Hermes agent](https://hermes-agent.nousresearch.com/)** drives live over
+CDP, and the **Hermes gateway** (WebUI / messaging) — built on the
+[LinuxServer Selkies base image](https://docs.linuxserver.io/images/docker-baseimage-selkies/).
+
+You log in through your browser, watch the agent click and type in a real Brave
+window, and optionally chat with the same agent from anywhere via the gateway.
+**X11 and Wayland are switchable with a single environment variable.**
+
+## What's inside
+
+| Component | Purpose | Port |
+| --- | --- | --- |
+| Selkies | Web-native desktop streamed to your browser | `3001` (https), `3000` (http) |
+| Brave | Headed browser launched with `--remote-debugging-port=9222` | (internal `9222`, loopback only) |
+| Hermes CLI | `hermes` running in an `xterm` inside the desktop | - |
+| Hermes gateway | `hermes gateway run` (WebUI / Telegram / Discord) | `8642` |
+| Hermes dashboard | Web UI (`HERMES_DASHBOARD=1`, starts after gateway) | `9119` |
+
+```
+You (browser)
+  │  https :3001  ───────────────►  Selkies desktop  ──►  Brave (headed)
+  │  http  :8642  ───────────────►  Hermes gateway        ▲   ▲
+  │  http  :9119  ───────────────►  Hermes dashboard      │   │ CDP 127.0.0.1:9222
+                                    hermes CLI (xterm) ───┘───┘
+```
+
+## Architecture notes
+
+- **Persistence:** in the Selkies base the `abc` user's `$HOME` is `/config`, and
+  `/config` is replaced by the mounted volume at runtime. So the Hermes **code** is
+  baked into `/opt/hermes` (ships in the image) while `HERMES_HOME=/config/.hermes`
+  keeps **config / API keys / memory** in the persistent volume.
+- **Browser control:** Brave starts headed in the desktop with remote debugging on
+  loopback `9222`; Hermes attaches via `browser.cdp_url` so every `browser_*` action
+  is visible in the desktop you log into.
+- **X11 / Wayland:** handled by the base image's `PIXELFLUX_WAYLAND` env var — no
+  custom plumbing. Brave is launched with `--ozone-platform-hint=auto` so the same
+  image renders correctly in either mode.
+
+## Quick start
+
+### With Docker Compose
+
+```bash
+# 1. Change the password in docker-compose.yml first!
+docker compose up -d --build
+
+# 2. Open the desktop and log in (user: abc / pass: changeme)
+#    https://<host-ip>:3001     (self-signed cert -> accept the warning)
+```
+
+### With plain docker run
+
+```bash
+docker build -t hermes-docker .
+
+docker run -d --name hermes-docker \
+  --shm-size=2gb \
+  --security-opt seccomp=unconfined \
+  -p 3001:3001 -p 8642:8642 -p 9119:9119 \
+  -e CUSTOM_USER=abc \
+  -e PASSWORD=changeme \
+  -e TITLE="Hermes Desktop" \
+  -e PIXELFLUX_WAYLAND=false \
+  -e HERMES_DASHBOARD=1 \
+  -e HERMES_DASHBOARD_BASIC_AUTH_USERNAME=abc \
+  -e HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=changeme \
+  -v "$PWD/data:/config" \
+  hermes-docker
+```
+
+## First-run setup (configure the LLM backend)
+
+No API keys are baked in — pick your provider once and it persists in the volume.
+
+1. Open `https://<host-ip>:3001` and log in.
+2. The desktop opens with a **Hermes terminal** (and a Brave window). In that
+   terminal run the wizard:
+
+   ```bash
+   hermes setup            # choose any provider + API key
+   # or, with a Nous Portal subscription (one OAuth covers model + tools):
+   hermes setup --portal
+   ```
+
+3. Once setup writes `/config/.hermes/.env`, the **gateway** auto-starts (s6 service
+   `gateway-default`) and the WebUI becomes reachable at `http://<host-ip>:8642`.
+   With `HERMES_DASHBOARD=1`, the **dashboard** starts on `:9119` after the gateway is up.
+4. Start chatting in the terminal with `hermes`, and ask it to browse — its actions
+   appear live in the Brave window. (In the CLI you can also run `/browser status`
+   to confirm the CDP connection, or `/browser connect` to attach manually.)
+
+### Brave / browser automation
+
+Brave starts from `/defaults/launch-desktop.sh` when the Selkies desktop opens.
+That script stays alive (`wait`) so Brave is not killed when Openbox autostart
+exits — a bare `brave-browser ... &` line fails silently while xterm still works.
+
+Verify:
+
+```bash
+cat /config/.config/openbox/autostart
+tail -20 /config/.hermes/logs/launch-desktop.log
+tail -20 /config/.hermes/logs/brave-stderr.log
+pgrep -a brave
+```
+
+If Hermes says browser tools are unavailable, check `/config/.hermes/config.yaml`
+contains `toolsets: [browser]` and `browser.cdp_url: ws://127.0.0.1:9222`.
+
+### Gateway
+
+Registered at `/run/service/gateway-default/` on boot. The slot is **never marked
+down** — the run script waits for `/config/.hermes/.env`, then starts. If you run
+`hermes setup` after the container is already up, opening the Selkies desktop also
+triggers a gateway start.
+
+Verify:
+
+```bash
+ls -la /run/service/gateway-default/
+test -f /config/.hermes/.env && echo "configured" || echo "run hermes setup first"
+curl -s -o /dev/null -w "gateway %{http_code}\n" http://127.0.0.1:8642/
+tail -20 /config/.hermes/logs/gateways/default/current
+hermes gateway status
+```
+
+Manual kick (inside container):
+
+```bash
+source /defaults/hermes-s6-lib.sh && hermes_start_slot gateway-default
+```
+
+### Dashboard (`HERMES_DASHBOARD=1`)
+
+Registered at `/run/service/hermes-dashboard/` by `21-reconcile-dashboard`, started
+after the gateway responds on `:8642`.
+
+Verify:
+
+```bash
+curl -s -o /dev/null -w "dashboard %{http_code}\n" -u abc:changeme http://127.0.0.1:9119/
+tail -20 /config/.hermes/logs/dashboard/current
+```
+
+| Mode | How | Notes |
+| --- | --- | --- |
+| X11 (default) | `PIXELFLUX_WAYLAND=false` | Widest compatibility, CPU encode |
+| Wayland | `PIXELFLUX_WAYLAND=true` | Smithay + Labwc, zero-copy GPU encode |
+
+Wayland mode requires an AVX2-capable CPU; on CPUs without AVX2 the base image
+**auto-falls-back to X11**. For GPU encode/render in Wayland mode, expose a GPU:
+
+```bash
+# Intel / AMD
+docker run ... --device /dev/dri -e PIXELFLUX_WAYLAND=true -e AUTO_GPU=true hermes-docker
+# NVIDIA (needs the nvidia container runtime on the host)
+docker run ... --gpus all --runtime nvidia -e PIXELFLUX_WAYLAND=true -e AUTO_GPU=true hermes-docker
+```
+
+(Compose: uncomment the `devices:` / `deploy:` blocks in `docker-compose.yml`.)
+
+## Configuration
+
+| Env var | Default | Description |
+| --- | --- | --- |
+| `PASSWORD` | `changeme` | Desktop HTTP basic-auth password (**change it**) |
+| `CUSTOM_USER` | `abc` | Desktop HTTP basic-auth username |
+| `TITLE` | `Hermes Desktop` | Browser tab title for the desktop |
+| `PIXELFLUX_WAYLAND` | `false` | `true` = Wayland, `false` = X11 |
+| `AUTO_GPU` | unset | `true` to auto-pick the first GPU (Wayland) |
+| `PUID` / `PGID` | `1000` | User/group ids for the `abc` user |
+| `HERMES_DASHBOARD` | `1` in compose | Set to `1` to enable the web dashboard on port `9119` |
+| `HERMES_DASHBOARD_HOST` | `0.0.0.0` | Dashboard bind address |
+| `HERMES_DASHBOARD_PORT` | `9119` | Dashboard HTTP port |
+| `HERMES_DASHBOARD_BASIC_AUTH_USERNAME` | `abc` | Login user (required for `0.0.0.0` bind) |
+| `HERMES_DASHBOARD_BASIC_AUTH_PASSWORD` | `changeme` | Login password (**change it**) |
+
+### Telegram (gateway)
+
+The image bakes **`python-telegram-bot==22.8`** into the Hermes venv at build time so
+the Telegram gateway adapter can import. Set these in `/config/.hermes/.env` (via
+`hermes setup` or by hand), then restart the gateway:
+
+```bash
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_ALLOWED_USERS=...
+source /defaults/hermes-s6-lib.sh && hermes_start_slot gateway-default
+```
+
+The default Hermes config lives at `root/defaults/hermes/config.yaml` and is seeded
+into `/config/.hermes/config.yaml` on first boot. Edit the seeded file (then
+restart) to tweak toolsets or the `browser.cdp_url`.
+
+## Repository layout
+
+```
+hermes-docker/
+├── Dockerfile                 # base image + Brave + Hermes + config
+├── docker-compose.yml
+├── root/                      # copied into the image at /
+│   ├── custom-cont-init.d/
+│   │   ├── 10-hermes-init                 # seeds config, desktop autostart, node symlinks
+│   │   ├── 20-reconcile-gateways          # /run/service/gateway-default (abc-owned)
+│   │   ├── 21-reconcile-dashboard         # /run/service/hermes-dashboard
+│   │   └── 99-cleanup-stale-dynamic-slots # removes old brave-browser slot only
+│   ├── etc/services.d/
+│   │   └── hermes-start/                  # rescan + start gateway/dashboard slots
+│   ├── defaults/
+│   │   ├── gateway-default/               # template for /run/service slot
+│   │   ├── hermes-dashboard/
+│   │   ├── launch-desktop.sh
+│   │   ├── autostart                      # calls launch-desktop.sh
+│   │   ├── autostart_wayland
+│   │   ├── menu.xml
+│   │   ├── menu_wayland.xml
+│   │   └── hermes/config.yaml
+└── README.md
+```
+
+## Security
+
+Selkies basic-auth is *"keep the kids out"*, not internet-grade. For anything
+exposed beyond a trusted network:
+
+- Put it behind a reverse proxy with real TLS + auth (e.g. LinuxServer SWAG).
+- Lock down the EC2 security group to your IP.
+- **Never** expose the Selkies control port `8083` or the gateway `8642` publicly
+  without your own authentication layer.
+- Brave runs with `--no-sandbox` (required in Docker); keep the container itself
+  isolated.
+
+## Notes / tradeoffs
+
+- The image is large (full desktop stack + Brave + Hermes' bundled Python/Node/
+  Playwright). That's the cost of an all-in-one; you could later split Hermes into a
+  sidecar container if size matters.
+- Hermes also ships a Playwright Chromium fallback, but this setup intentionally
+  drives the **visible Brave** via CDP so you can watch (and take over) the session.

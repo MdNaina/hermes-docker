@@ -1,0 +1,35 @@
+#!/usr/bin/with-contenv bash
+case "${HERMES_DASHBOARD:-}" in
+    1|true|TRUE|True|yes|YES|Yes) ;;
+    *)
+        exit 0
+        ;;
+esac
+
+export HERMES_HOME=/config/.hermes
+export HOME=/config
+export PATH="/usr/local/bin:/usr/bin:/bin"
+
+dash_host="${HERMES_DASHBOARD_HOST:-0.0.0.0}"
+dash_port="${HERMES_DASHBOARD_PORT:-9119}"
+api_port="${API_SERVER_PORT:-8642}"
+
+if [ "$dash_host" != "127.0.0.1" ] && [ "$dash_host" != "localhost" ]; then
+    if [ -z "${HERMES_DASHBOARD_BASIC_AUTH_USERNAME:-}" ] \
+        || [ -z "${HERMES_DASHBOARD_BASIC_AUTH_PASSWORD:-}" ]; then
+        echo "[hermes-dashboard] set HERMES_DASHBOARD_BASIC_AUTH_USERNAME + _PASSWORD" >&2
+        exit 78
+    fi
+fi
+
+echo "[hermes-dashboard] waiting for gateway on :${api_port} ..."
+for _ in $(seq 1 120); do
+    if curl -sf "http://127.0.0.1:${api_port}/" >/dev/null 2>&1 \
+        || curl -sf "http://127.0.0.1:${api_port}/health" >/dev/null 2>&1; then
+        break
+    fi
+    sleep 2
+done
+
+[ "$(id -u)" = 0 ] || exec hermes dashboard --host "$dash_host" --port "$dash_port" --no-open
+exec s6-setuidgid abc hermes dashboard --host "$dash_host" --port "$dash_port" --no-open

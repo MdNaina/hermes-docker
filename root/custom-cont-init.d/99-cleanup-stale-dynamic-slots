@@ -1,0 +1,19 @@
+#!/usr/bin/with-contenv bash
+# Brave uses launch-desktop.sh, not /run/service/. Remove only that stale slot.
+SCANDIR=/run/service
+SERVICE="${SCANDIR}/brave-browser"
+
+if [ ! -d "${SERVICE}" ]; then
+    exit 0
+fi
+
+if [ -d "${SCANDIR}/.s6-svscan" ] && command -v s6-svscanctl >/dev/null 2>&1; then
+    s6-svscanctl -an "${SCANDIR}" 2>/dev/null || true
+fi
+
+rm -rf "${SERVICE}"
+echo "[cleanup] removed stale ${SERVICE}"
+
+if [ -d "${SCANDIR}/.s6-svscan" ] && command -v s6-svscanctl >/dev/null 2>&1; then
+    s6-svscanctl -a "${SCANDIR}" 2>/dev/null || true
+fi

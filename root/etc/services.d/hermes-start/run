@@ -1,0 +1,36 @@
+#!/usr/bin/with-contenv bash
+# Rescan /run/service and start Hermes slots once s6-svscan is ready.
+
+# shellcheck source=/defaults/hermes-s6-lib.sh
+source /defaults/hermes-s6-lib.sh
+
+SCANDIR=/run/service
+
+for _ in $(seq 1 120); do
+    if [ -d "${SCANDIR}/.s6-svscan" ]; then
+        break
+    fi
+    sleep 1
+done
+
+if [ ! -d "${SCANDIR}/.s6-svscan" ]; then
+    echo "[hermes-start] s6-svscan not ready on ${SCANDIR}" >&2
+    exit 0
+fi
+
+# Gateway: always bring the slot up (run script waits for .env internally).
+if hermes_start_slot gateway-default; then
+    echo "[hermes-start] gateway-default started"
+else
+    echo "[hermes-start] gateway-default not started yet" >&2
+fi
+
+case "${HERMES_DASHBOARD:-}" in
+    1|true|TRUE|True|yes|YES|Yes)
+        if hermes_start_slot hermes-dashboard; then
+            echo "[hermes-start] hermes-dashboard started"
+        fi
+        ;;
+esac
+
+exit 0

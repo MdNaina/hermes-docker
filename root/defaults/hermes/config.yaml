@@ -1,0 +1,20 @@
+# Hermes Agent configuration template.
+#
+# Seeded into $HERMES_HOME (/config/.hermes/config.yaml) on first container
+# start if no config exists yet. Provider/model are intentionally left unset:
+# run `hermes setup` (or `hermes setup --portal`) once in the desktop terminal
+# to populate /config/.hermes/.env with your LLM provider + keys. That state
+# persists in the mounted /config volume and is shared by the CLI and gateway.
+
+# Enable the CLI tools plus browser automation.
+toolsets:
+  - hermes-cli
+  - browser
+
+browser:
+  # Attach all browser_* tools (and browser_cdp) to the headed Brave window
+  # running in the Selkies desktop, launched with --remote-debugging-port=9222.
+  # This makes the agent's browsing visible in the desktop you log into.
+  # If the connection fails, try the HTTP form (http://127.0.0.1:9222) or run
+  # `/browser connect` from the Hermes CLI.
+  cdp_url: ws://127.0.0.1:9222
