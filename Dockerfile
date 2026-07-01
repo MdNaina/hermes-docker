@@ -87,6 +87,8 @@ RUN set -eux; \
         PATH="/opt/hermes/.hermes/node/bin:${PATH}" \
         HOME=/opt/hermes \
         npm --prefix /usr/local/lib/hermes-agent run build -w web; \
+        # Clean npm cache to reduce image size (~50MB saved).
+        rm -rf /root/.npm /opt/hermes/.hermes/node/.cache 2>/dev/null || true; \
     fi
 
 # Persist Hermes state/config/keys in the mounted /config volume.

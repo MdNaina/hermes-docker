@@ -25,6 +25,15 @@ LOG="${LOG_DIR}/launch-desktop.log"
         BRAVE="$(command -v brave-browser-stable || command -v brave-browser || true)"
     fi
 
+    # Build GPU flags. BRAVE_DISABLE_GPU defaults to 'true' for widest
+    # compatibility (CPU rendering). Set to 'false' to let Brave use GPU
+    # acceleration when devices are available.
+    brave_gpu_flags=""
+    case "${BRAVE_DISABLE_GPU:-true}" in
+        1|true|TRUE|True|yes|YES|Yes) brave_gpu_flags="--disable-gpu" ;;
+        *)                              brave_gpu_flags=""               ;;
+    esac
+
     if [ -n "$BRAVE" ] && [ -x "$BRAVE" ]; then
         setsid "$BRAVE" \
             --remote-debugging-port=9222 \
@@ -33,7 +42,7 @@ LOG="${LOG_DIR}/launch-desktop.log"
             --ozone-platform-hint=auto \
             --no-sandbox \
             --disable-dev-shm-usage \
-            --disable-gpu \
+            ${brave_gpu_flags:+$brave_gpu_flags} \
             --no-first-run \
             --no-default-browser-check \
             --start-maximized \

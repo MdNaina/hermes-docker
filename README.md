@@ -178,6 +178,7 @@ docker run ... --gpus all --runtime nvidia -e PIXELFLUX_WAYLAND=true -e AUTO_GPU
 | `HERMES_DASHBOARD_PORT` | `9119` | Dashboard HTTP port |
 | `HERMES_DASHBOARD_BASIC_AUTH_USERNAME` | `abc` | Login user (required for `0.0.0.0` bind) |
 | `HERMES_DASHBOARD_BASIC_AUTH_PASSWORD` | `changeme` | Login password (**change it**) |
+| `BRAVE_DISABLE_GPU` | `true` | Set to `false` to let Brave use GPU acceleration (requires `--device /dev/dri` or `--gpus all`) |
 
 ### Telegram (gateway)
 
@@ -240,3 +241,59 @@ exposed beyond a trusted network:
   sidecar container if size matters.
 - Hermes also ships a Playwright Chromium fallback, but this setup intentionally
   drives the **visible Brave** via CDP so you can watch (and take over) the session.
+
+## State portability
+
+All Hermes state lives in the mounted `/config` volume and survives container
+recreation. To migrate to a new container (image upgrade, different host, etc.):
+
+1. **Copy the full state** from the old container:
+   ```bash
+   # From the host running the old container:
+   docker cp hermes-docker:/config ./hermes-state-backup
+   ```
+
+2. **Start the new container** with that state mounted:
+   ```bash
+   # Replace ./data with your backup:
+   docker run -d --name hermes-docker \
+     ...
+     -v "$PWD/hermes-state-backup:/config" \
+     hermes-docker
+   ```
+
+### What survives
+
+| Path | Content | Persists |
+|------|---------|----------|
+| `/config/.hermes/` | Config, API keys (`.env`), session history, skills, cron jobs, memory, kanban | ✅ Yes |
+| `/config/.hermes/sessions/state.db` | All conversation history | ✅ Yes |
+| `/config/.hermes/memories/` | Learned user preferences and facts | ✅ Yes |
+| `/config/.hermes/skills/` | Custom skill definitions | ✅ Yes |
+| `/config/.hermes/cron/` | Scheduled cron jobs | ✅ Yes |
+| `/config/.hermes/.env` | API keys for LLM providers and Telegram | ✅ Yes |
+| `/config/.hermes/config.yaml` | Hermes runtime configuration | ✅ Yes (not overwritten by init) |
+| `/config/.brave/` | Brave browser profile, cookies, login sessions | ✅ Yes |
+| `/config/.config/browser-harness/` | Browser-harness daemon state | ✅ Yes |
+| `/config/.config/openbox/` or `labwc/` | Desktop autostart and menu | Re-seeded by init |
+
+### What gets recreated
+
+- **Symlinks** (`/config/.hermes/node`, `/config/.hermes/bin`) point to baked paths
+  in the image (`/opt/hermes/.hermes/`) — they work automatically on any
+  container built from this image.
+- **Gateway/Dashboard s6 services** are re-registered by init scripts on each boot.
+- **Gateway state** (`gateway_state.json`) is recreated when `.env` is detected.
+- **Logs** (`/config/.hermes/logs/`) are rotated by s6-log; old logs are replaced
+  on container start.
+
+### Important for new containers
+
+- If you pre-populate `/config/.hermes/.env` with your API keys before first boot,
+  the gateway starts automatically — no need to open the desktop and run
+  `hermes setup`.
+- The `10-hermes-init` script only seeds `config.yaml` if it doesn't already exist,
+  so your existing config is preserved.
+- **Brave profile** (`/config/.brave/`) carries browser cookies and sessions.
+  Without it, the agent starts with a fresh browser — bookmarks and saved logins
+  are lost.
