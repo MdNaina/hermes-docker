@@ -15,7 +15,7 @@ services:
       - "9119:9119"   # Hermes web dashboard (when HERMES_DASHBOARD=1)
     environment:
       # ---- Selkies web desktop ----
-      - CUSTOM_USER=abc          # HTTP basic-auth username
+      - CUSTOM_USER=hermes       # HTTP basic-auth username
       - PASSWORD=changeme        # HTTP basic-auth password (CHANGE ME)
       - TITLE=Hermes Desktop
       - PUID=1000
@@ -33,7 +33,7 @@ services:
       - HERMES_DASHBOARD_HOST=0.0.0.0
       - HERMES_DASHBOARD_PORT=9119
       # Required for 0.0.0.0 bind (non-loopback). Change these — do not use defaults on the public internet.
-      - HERMES_DASHBOARD_BASIC_AUTH_USERNAME=abc
+      - HERMES_DASHBOARD_BASIC_AUTH_USERNAME=hermes
       - HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=changeme
     volumes:
       - ./data:/config

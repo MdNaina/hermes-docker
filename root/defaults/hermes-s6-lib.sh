@@ -3,11 +3,11 @@
 
 hermes_fix_scandir_perms() {
     local scandir="/run/service"
-    chown abc:abc "${scandir}" 2>/dev/null || true
+    chown hermes:hermes "${scandir}" 2>/dev/null || true
     if [ -d "${scandir}/.s6-svscan" ]; then
         for entry in control lock; do
             if [ -e "${scandir}/.s6-svscan/${entry}" ]; then
-                chown abc:abc "${scandir}/.s6-svscan/${entry}" 2>/dev/null || true
+                chown hermes:hermes "${scandir}/.s6-svscan/${entry}" 2>/dev/null || true
             fi
         done
     fi
@@ -22,8 +22,8 @@ hermes_seed_supervise() {
         mkfifo "${dir}/supervise/control"
         chmod 660 "${dir}/supervise/control"
     fi
-    chown -R abc:abc "${dir}/event" "${dir}/supervise" 2>/dev/null || true
-    chown abc:abc "${dir}/supervise/control" 2>/dev/null || true
+    chown -R hermes:hermes "${dir}/event" "${dir}/supervise" 2>/dev/null || true
+    chown hermes:hermes "${dir}/supervise/control" 2>/dev/null || true
 }
 
 hermes_start_slot() {

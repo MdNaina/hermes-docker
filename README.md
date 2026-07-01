@@ -29,7 +29,7 @@ You (browser)
 
 ## Architecture notes
 
-- **Persistence:** in the Selkies base the `abc` user's `$HOME` is `/config`, and
+- **Persistence:** in the Selkies base the `hermes` user's `$HOME` is `/config`, and
   `/config` is replaced by the mounted volume at runtime. So the Hermes **code** is
   baked into `/opt/hermes` (ships in the image) while `HERMES_HOME=/config/.hermes`
   keeps **config / API keys / memory** in the persistent volume.
@@ -48,7 +48,7 @@ You (browser)
 # 1. Change the password in docker-compose.yml first!
 docker compose up -d --build
 
-# 2. Open the desktop and log in (user: abc / pass: changeme)
+# 2. Open the desktop and log in (user: hermes / pass: changeme)
 #    https://<host-ip>:3001     (self-signed cert -> accept the warning)
 ```
 
@@ -61,12 +61,12 @@ docker run -d --name hermes-docker \
   --shm-size=2gb \
   --security-opt seccomp=unconfined \
   -p 3001:3001 -p 8642:8642 -p 9119:9119 \
-  -e CUSTOM_USER=abc \
+  -e CUSTOM_USER=hermes \
   -e PASSWORD=changeme \
   -e TITLE="Hermes Desktop" \
   -e PIXELFLUX_WAYLAND=false \
   -e HERMES_DASHBOARD=1 \
-  -e HERMES_DASHBOARD_BASIC_AUTH_USERNAME=abc \
+  -e HERMES_DASHBOARD_BASIC_AUTH_USERNAME=hermes \
   -e HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=changeme \
   -v "$PWD/data:/config" \
   hermes-docker
@@ -142,7 +142,7 @@ after the gateway responds on `:8642`.
 Verify:
 
 ```bash
-curl -s -o /dev/null -w "dashboard %{http_code}\n" -u abc:changeme http://127.0.0.1:9119/
+curl -s -o /dev/null -w "dashboard %{http_code}\n" -u hermes:changeme http://127.0.0.1:9119/
 tail -20 /config/.hermes/logs/dashboard/current
 ```
 
@@ -168,15 +168,15 @@ docker run ... --gpus all --runtime nvidia -e PIXELFLUX_WAYLAND=true -e AUTO_GPU
 | Env var | Default | Description |
 | --- | --- | --- |
 | `PASSWORD` | `changeme` | Desktop HTTP basic-auth password (**change it**) |
-| `CUSTOM_USER` | `abc` | Desktop HTTP basic-auth username |
+| `CUSTOM_USER` | `hermes` | Desktop HTTP basic-auth username |
 | `TITLE` | `Hermes Desktop` | Browser tab title for the desktop |
 | `PIXELFLUX_WAYLAND` | `false` | `true` = Wayland, `false` = X11 |
 | `AUTO_GPU` | unset | `true` to auto-pick the first GPU (Wayland) |
-| `PUID` / `PGID` | `1000` | User/group ids for the `abc` user |
+| `PUID` / `PGID` | `1000` | User/group ids for the `hermes` user |
 | `HERMES_DASHBOARD` | `1` in compose | Set to `1` to enable the web dashboard on port `9119` |
 | `HERMES_DASHBOARD_HOST` | `0.0.0.0` | Dashboard bind address |
 | `HERMES_DASHBOARD_PORT` | `9119` | Dashboard HTTP port |
-| `HERMES_DASHBOARD_BASIC_AUTH_USERNAME` | `abc` | Login user (required for `0.0.0.0` bind) |
+| `HERMES_DASHBOARD_BASIC_AUTH_USERNAME` | `hermes` | Login user (required for `0.0.0.0` bind) |
 | `HERMES_DASHBOARD_BASIC_AUTH_PASSWORD` | `changeme` | Login password (**change it**) |
 | `BRAVE_DISABLE_GPU` | `true` | Set to `false` to let Brave use GPU acceleration (requires `--device /dev/dri` or `--gpus all`) |
 
@@ -205,7 +205,7 @@ hermes-docker/
 ├── root/                      # copied into the image at /
 │   ├── custom-cont-init.d/
 │   │   ├── 10-hermes-init                 # seeds config, desktop autostart, node symlinks
-│   │   ├── 20-reconcile-gateways          # /run/service/gateway-default (abc-owned)
+│   │   ├── 20-reconcile-gateways          # /run/service/gateway-default (hermes-owned)
 │   │   ├── 21-reconcile-dashboard         # /run/service/hermes-dashboard
 │   │   └── 99-cleanup-stale-dynamic-slots # removes old brave-browser slot only
 │   ├── etc/services.d/

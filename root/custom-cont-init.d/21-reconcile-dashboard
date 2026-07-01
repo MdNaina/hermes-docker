@@ -50,6 +50,6 @@ mv "${tmp}" "${SERVICE}"
 
 hermes_seed_supervise "${SERVICE}"
 hermes_seed_supervise "${SERVICE}/log"
-chown -R abc:abc "${HERMES_HOME}/logs/dashboard" 2>/dev/null || true
+chown -R hermes:hermes "${HERMES_HOME}/logs/dashboard" 2>/dev/null || true
 
 echo "[reconcile-dashboard] hermes-dashboard registered (enabled=${dashboard_enabled})"

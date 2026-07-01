@@ -25,11 +25,11 @@ for item in node bin; do
     fi
 done
 
-# Own the real (non-symlink) state with the abc user; leave symlinks pointing at
+# Own the real (non-symlink) state with the hermes user; leave symlinks pointing at
 # the root-owned, world-readable baked trees.
-find "${HERMES_HOME}" -maxdepth 1 -mindepth 1 ! -type l -exec chown -R abc:abc {} + 2>/dev/null || true
-chown -h abc:abc "${HERMES_HOME}"/node "${HERMES_HOME}"/bin 2>/dev/null || true
-chown abc:abc "${HERMES_HOME}" /config/.brave 2>/dev/null || true
+find "${HERMES_HOME}" -maxdepth 1 -mindepth 1 ! -type l -exec chown -R hermes:hermes {} + 2>/dev/null || true
+chown -h hermes:hermes "${HERMES_HOME}"/node "${HERMES_HOME}"/bin 2>/dev/null || true
+chown hermes:hermes "${HERMES_HOME}" /config/.brave 2>/dev/null || true
 
 # Stale Brave profile locks block a new window after a crash.
 rm -f /config/.brave/SingletonLock /config/.brave/SingletonSocket /config/.brave/SingletonCookie 2>/dev/null || true
@@ -50,7 +50,7 @@ sync_desktop_autostart() {
         || grep -q '\\$' "${target}" 2>/dev/null; then
         cp "${def_autostart}" "${target}"
         echo "${DESKTOP_AUTOSTART_VERSION}" > "${marker}"
-        chown abc:abc "${marker}" "${target}" 2>/dev/null || true
+        chown hermes:hermes "${marker}" "${target}" 2>/dev/null || true
         echo "[hermes-init] Refreshed desktop autostart at ${target}"
     fi
     if [ -n "${def_menu}" ] && [ -f "${def_menu}" ]; then
@@ -59,7 +59,7 @@ sync_desktop_autostart() {
             echo "[hermes-init] Refreshed desktop menu at ${conf_dir}/menu.xml"
         fi
     fi
-    chown -R abc:abc "${conf_dir}" 2>/dev/null || true
+    chown -R hermes:hermes "${conf_dir}" 2>/dev/null || true
 }
 
 sync_desktop_autostart /config/.config/openbox /defaults/autostart /defaults/menu.xml
@@ -73,13 +73,13 @@ browser:
   cdp_url: ws://127.0.0.1:9222
 EOF
     echo "[hermes-init] Appended browser.cdp_url to ${HERMES_HOME}/config.yaml"
-    chown abc:abc "${HERMES_HOME}/config.yaml" 2>/dev/null || true
+    chown hermes:hermes "${HERMES_HOME}/config.yaml" 2>/dev/null || true
 fi
 if [ -f "${HERMES_HOME}/config.yaml" ] && ! grep -q 'browser' "${HERMES_HOME}/config.yaml" 2>/dev/null; then
     if grep -q '^toolsets:' "${HERMES_HOME}/config.yaml" 2>/dev/null \
         && ! grep -A20 '^toolsets:' "${HERMES_HOME}/config.yaml" | grep -q 'browser'; then
         sed -i '/^toolsets:/a\  - browser' "${HERMES_HOME}/config.yaml"
         echo "[hermes-init] Added browser toolset to ${HERMES_HOME}/config.yaml"
-        chown abc:abc "${HERMES_HOME}/config.yaml" 2>/dev/null || true
+        chown hermes:hermes "${HERMES_HOME}/config.yaml" 2>/dev/null || true
     fi
 fi
