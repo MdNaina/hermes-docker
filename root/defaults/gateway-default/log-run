@@ -2,7 +2,7 @@
 : "${HERMES_HOME:=/config/.hermes}"
 log_dir="${HERMES_HOME}/logs/gateways/default"
 mkdir -p "$log_dir"
-chown abc:abc "${HERMES_HOME}/logs/gateways" "$log_dir" 2>/dev/null || true
+chown hermes:hermes "${HERMES_HOME}/logs/gateways" "$log_dir" 2>/dev/null || true
 rm -f "$log_dir/lock"
 [ "$(id -u)" = 0 ] || exec s6-log 1 n10 s1000000 T "$log_dir"
-exec s6-setuidgid abc s6-log 1 n10 s1000000 T "$log_dir"
+exec s6-setuidgid hermes s6-log 1 n10 s1000000 T "$log_dir"

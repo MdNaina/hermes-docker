@@ -19,7 +19,7 @@ hermes_fix_scandir_perms
 # If Hermes is already configured, mark desired state running on each container boot.
 if [ -f "${HERMES_HOME}/.env" ]; then
     echo '{"gateway_state":"running","desired_state":"running"}' > "${HERMES_HOME}/gateway_state.json"
-    chown abc:abc "${HERMES_HOME}/gateway_state.json"
+    chown hermes:hermes "${HERMES_HOME}/gateway_state.json"
 fi
 
 tmp="${SCANDIR}/.gateway-default.tmp"
@@ -40,6 +40,6 @@ mv "${tmp}" "${SERVICE}"
 
 hermes_seed_supervise "${SERVICE}"
 hermes_seed_supervise "${SERVICE}/log"
-chown -R abc:abc "${HERMES_HOME}/logs/gateways" 2>/dev/null || true
+chown -R hermes:hermes "${HERMES_HOME}/logs/gateways" 2>/dev/null || true
 
 echo "[reconcile-gateways] gateway-default registered at ${SERVICE}"

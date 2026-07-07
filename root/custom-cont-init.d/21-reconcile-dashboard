@@ -1,4 +1,10 @@
 #!/usr/bin/with-contenv bash
+# Reconcile the dashboard s6 service.
+#
+# Hermes v0.17+ creates its own s6-rc dashboard service at
+# /run/s6-rc/servicedirs/dashboard/ during build. When that already exists,
+# skip creating a duplicate legacy service at /run/service/hermes-dashboard/
+# to avoid two dashboard processes competing for port 9119.
 set -e
 
 # shellcheck source=/defaults/hermes-s6-lib.sh
@@ -8,6 +14,13 @@ HERMES_HOME=/config/.hermes
 SCANDIR=/run/service
 SERVICE="${SCANDIR}/hermes-dashboard"
 TEMPLATE=/defaults/hermes-dashboard
+S6RC_DASHBOARD=/run/s6-rc/servicedirs/dashboard
+
+# If the s6-rc dashboard is already registered (Hermes built-in), do nothing.
+if [ -d "${S6RC_DASHBOARD}" ] && [ -x "${S6RC_DASHBOARD}/run" ]; then
+    echo "[reconcile-dashboard] s6-rc dashboard already exists at ${S6RC_DASHBOARD} — skipping legacy service"
+    exit 0
+fi
 
 case "${HERMES_DASHBOARD:-}" in
     1|true|TRUE|True|yes|YES|Yes) dashboard_enabled=true ;;
@@ -37,6 +50,6 @@ mv "${tmp}" "${SERVICE}"
 
 hermes_seed_supervise "${SERVICE}"
 hermes_seed_supervise "${SERVICE}/log"
-chown -R abc:abc "${HERMES_HOME}/logs/dashboard" 2>/dev/null || true
+chown -R hermes:hermes "${HERMES_HOME}/logs/dashboard" 2>/dev/null || true
 
 echo "[reconcile-dashboard] hermes-dashboard registered (enabled=${dashboard_enabled})"

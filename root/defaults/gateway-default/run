@@ -13,4 +13,4 @@ done
 echo "[gateway-default] config found, starting gateway"
 
 [ "$(id -u)" = 0 ] || exec hermes gateway run --replace
-exec s6-setuidgid abc hermes gateway run --replace
+exec s6-setuidgid hermes hermes gateway run --replace
