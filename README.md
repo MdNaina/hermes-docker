@@ -64,7 +64,7 @@ docker compose up -d --build
 ```bash
 docker build -t hermes-docker .
 
-docker run -d --name hermes-docker \
+docker run -d --name "$(basename "$PWD")" \
   --shm-size=2gb \
   --security-opt seccomp=unconfined \
   -p 3001:3001 -p 8642:8642 -p 9119:9119 \
@@ -91,6 +91,10 @@ docker compose up -d --build
 The wizard writes:
 
 - `.env` for Docker Compose credentials, bind address, and dashboard settings
+- `COMPOSE_PROJECT_NAME` and `HERMES_CONTAINER_NAME`, defaulting to the current
+  folder name so multiple checkouts can run side by side
+- published host ports for Selkies, gateway, and dashboard; choose different
+  ports for each local instance
 - `data/.hermes/.env` for Hermes gateway/API secrets, provider keys, and
   Telegram or Slack tokens
 - `data/.hermes/config.yaml` for the selected provider/model and browser config
@@ -201,6 +205,12 @@ docker run ... --gpus all --runtime nvidia -e PIXELFLUX_WAYLAND=true -e AUTO_GPU
 
 | Env var | Default | Description |
 | --- | --- | --- |
+| `COMPOSE_PROJECT_NAME` | current folder from setup wizard | Compose project/network prefix for this instance |
+| `HERMES_CONTAINER_NAME` | current folder from setup wizard | Docker container name for this instance |
+| `HERMES_DESKTOP_HTTPS_HOST_PORT` | `3001` | Published host port for Selkies HTTPS |
+| `HERMES_DESKTOP_HTTP_HOST_PORT` | `3000` | Published host port for Selkies HTTP |
+| `HERMES_GATEWAY_HOST_PORT` | `8642` | Published host port for the Hermes gateway |
+| `HERMES_DASHBOARD_HOST_PORT` | `9119` | Published host port for the dashboard |
 | `PASSWORD` | `changeme` | Desktop HTTP basic-auth password (**change it**) |
 | `CUSTOM_USER` | `abc` | Desktop HTTP basic-auth username |
 | `TITLE` | `Hermes Desktop` | Browser tab title for the desktop |
@@ -267,6 +277,23 @@ disk image size. The most direct cleanup is:
 docker image prune -a
 docker builder prune
 ```
+
+### Multiple instances
+
+Each checkout can run as its own instance. `./setup-hermes-env` defaults the
+Compose project name and container name to the current folder name, then writes
+them to `.env`.
+
+```bash
+cp -R hermes-agent-docker hermes-work
+cd hermes-work
+./setup-hermes-env
+docker compose up -d
+```
+
+Use different published host ports for every instance when prompted, for example
+`3101`, `3100`, `8742`, and `9219` for the second copy. The in-container ports
+stay `3001`, `3000`, `8642`, and `9119`.
 
 ### Telegram (gateway)
 

@@ -2,17 +2,17 @@ services:
   hermes-docker:
     build: .
     image: hermes-docker
-    container_name: hermes-docker
+    container_name: ${HERMES_CONTAINER_NAME:-hermes-docker}
     # Chromium/Brave needs a larger /dev/shm and an unconfined seccomp profile
     # to run inside Docker (paired with --no-sandbox in autostart).
     shm_size: "2gb"
     security_opt:
       - seccomp:unconfined
     ports:
-      - "${HERMES_BIND_ADDRESS:-127.0.0.1}:3001:3001"   # Selkies desktop (HTTPS)
-      - "${HERMES_BIND_ADDRESS:-127.0.0.1}:3000:3000"   # Selkies desktop (HTTP, optional)
-      - "${HERMES_BIND_ADDRESS:-127.0.0.1}:8642:8642"   # Hermes gateway API / messaging (/health)
-      - "${HERMES_BIND_ADDRESS:-127.0.0.1}:9119:9119"   # Hermes web dashboard (when HERMES_DASHBOARD=1)
+      - "${HERMES_BIND_ADDRESS:-127.0.0.1}:${HERMES_DESKTOP_HTTPS_HOST_PORT:-3001}:3001"   # Selkies desktop (HTTPS)
+      - "${HERMES_BIND_ADDRESS:-127.0.0.1}:${HERMES_DESKTOP_HTTP_HOST_PORT:-3000}:3000"     # Selkies desktop (HTTP, optional)
+      - "${HERMES_BIND_ADDRESS:-127.0.0.1}:${HERMES_GATEWAY_HOST_PORT:-8642}:8642"          # Hermes gateway API / messaging (/health)
+      - "${HERMES_BIND_ADDRESS:-127.0.0.1}:${HERMES_DASHBOARD_HOST_PORT:-9119}:9119"        # Hermes web dashboard (when HERMES_DASHBOARD=1)
     environment:
       # ---- Selkies web desktop ----
       - CUSTOM_USER=${CUSTOM_USER:?run ./setup-hermes-env first}
