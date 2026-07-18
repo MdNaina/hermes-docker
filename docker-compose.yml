@@ -9,32 +9,38 @@ services:
     security_opt:
       - seccomp:unconfined
     ports:
-      - "3001:3001"   # Selkies desktop (HTTPS)
-      - "3000:3000"   # Selkies desktop (HTTP, optional)
-      - "8642:8642"   # Hermes gateway (WebUI / messaging)
-      - "9119:9119"   # Hermes web dashboard (when HERMES_DASHBOARD=1)
+      - "${HERMES_BIND_ADDRESS:-127.0.0.1}:3001:3001"   # Selkies desktop (HTTPS)
+      - "${HERMES_BIND_ADDRESS:-127.0.0.1}:3000:3000"   # Selkies desktop (HTTP, optional)
+      - "${HERMES_BIND_ADDRESS:-127.0.0.1}:8642:8642"   # Hermes gateway API / messaging (/health)
+      - "${HERMES_BIND_ADDRESS:-127.0.0.1}:9119:9119"   # Hermes web dashboard (when HERMES_DASHBOARD=1)
     environment:
       # ---- Selkies web desktop ----
-      - CUSTOM_USER=abc          # HTTP basic-auth username
-      - PASSWORD=changeme        # HTTP basic-auth password (CHANGE ME)
-      - TITLE=Hermes Desktop
-      - PUID=1000
-      - PGID=1000
-      - TZ=Etc/UTC
+      - CUSTOM_USER=${CUSTOM_USER:?run ./setup-hermes-env first}
+      - PASSWORD=${PASSWORD:?run ./setup-hermes-env first}
+      - TITLE=${TITLE:-Hermes Desktop}
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-Etc/UTC}
       # ---- X11 / Wayland switch ----
       # false = X11 (default, widest compatibility, CPU encode)
       # true  = Wayland (Smithay + Labwc, zero-copy GPU encode; needs AVX2/GPU,
       #         auto-falls-back to X11 on CPUs without AVX2)
-      - PIXELFLUX_WAYLAND=false
+      - PIXELFLUX_WAYLAND=${PIXELFLUX_WAYLAND:-false}
       # Uncomment to auto-use the first GPU for Wayland encode/render:
       # - AUTO_GPU=true
       # ---- Hermes web dashboard (starts after gateway on :8642) ----
-      - HERMES_DASHBOARD=1
-      - HERMES_DASHBOARD_HOST=0.0.0.0
-      - HERMES_DASHBOARD_PORT=9119
+      - HERMES_DASHBOARD=${HERMES_DASHBOARD:-1}
+      - HERMES_DASHBOARD_HOST=${HERMES_DASHBOARD_HOST:-0.0.0.0}
+      - HERMES_DASHBOARD_PORT=${HERMES_DASHBOARD_PORT:-9119}
+      - HERMES_WEB_DIST=/usr/local/lib/hermes-agent/hermes_cli/web_dist
+      - HERMES_TUI_DIR=/usr/local/lib/hermes-agent/ui-tui
+      - BU_CDP_URL=${BU_CDP_URL:-http://127.0.0.1:9222}
+      - BROWSER_HARNESS_HOME=${BROWSER_HARNESS_HOME:-/config/.browser-harness}
+      - BH_HOME=${BH_HOME:-/config/.browser-harness}
+      - BH_DOMAIN_SKILLS=${BH_DOMAIN_SKILLS:-0}
       # Required for 0.0.0.0 bind (non-loopback). Change these — do not use defaults on the public internet.
-      - HERMES_DASHBOARD_BASIC_AUTH_USERNAME=abc
-      - HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=changeme
+      - HERMES_DASHBOARD_BASIC_AUTH_USERNAME=${HERMES_DASHBOARD_BASIC_AUTH_USERNAME:?run ./setup-hermes-env first}
+      - HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=${HERMES_DASHBOARD_BASIC_AUTH_PASSWORD:?run ./setup-hermes-env first}
     volumes:
       - ./data:/config
     restart: unless-stopped

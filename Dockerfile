@@ -17,10 +17,10 @@ LABEL org.opencontainers.image.description="Selkies web desktop + headed Brave +
 # ---------------------------------------------------------------------------
 # Build prerequisites for the Hermes installer, an in-desktop terminal, and the
 # Brave apt repository tooling. The Hermes installer pulls its own Python and
-# Node.js; we provide ripgrep (fast file search) and ffmpeg (TTS/voice) here so
-# the installer detects them as present instead of warning (it can't apt-install
-# them itself once the lists are cleared).
+# Node.js. Keep the default package set lean because Docker Desktop builders can
+# have a small /var/cache/apt/archives budget, especially on arm64.
 # ---------------------------------------------------------------------------
+ARG INSTALL_OPTIONAL_BUILD_TOOLS=false
 RUN set -eux; \
     apt-get update; \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -29,11 +29,19 @@ RUN set -eux; \
         git \
         gnupg \
         xz-utils \
-        build-essential \
         apt-transport-https \
         ripgrep \
-        ffmpeg \
         xterm; \
+    apt-get clean; \
+    rm -rf /var/cache/apt/archives/*.deb /var/lib/apt/lists/*; \
+    if [ "${INSTALL_OPTIONAL_BUILD_TOOLS}" = "true" ]; then \
+        apt-get update; \
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential \
+            ffmpeg; \
+        apt-get clean; \
+        rm -rf /var/cache/apt/archives/*.deb /var/lib/apt/lists/*; \
+    fi; \
     # ---- Brave browser (official apt repo) ----
     curl -fsSLo /usr/share/keyrings/brave-browser-archive-keyring.gpg \
         https://brave-browser-apt-release.s3.brave.com/brave-browser-archive-keyring.gpg; \
@@ -43,7 +51,7 @@ RUN set -eux; \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         brave-browser; \
     apt-get clean; \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/cache/apt/archives/*.deb /var/lib/apt/lists/*
 
 # ---------------------------------------------------------------------------
 # Install Hermes at build time (as root -> the installer uses an FHS layout):
@@ -70,10 +78,19 @@ RUN set -eux; \
     # Telegram gateway adapter requires python-telegram-bot in the Hermes venv (not
     # bundled by the default installer). Bake it so TELEGRAM_* vars in .env work.
     HERMES_VENV=/usr/local/lib/hermes-agent/venv; \
-    if [ -x "${HERMES_VENV}/bin/pip" ]; then \
-        "${HERMES_VENV}/bin/pip" install --no-cache-dir 'python-telegram-bot==22.8'; \
-        "${HERMES_VENV}/bin/python" -c 'import telegram; print("python-telegram-bot", telegram.__version__)'; \
-    fi; \
+    HERMES_UV=/opt/hermes/.hermes/bin/uv; \
+    test -x "${HERMES_VENV}/bin/python"; \
+    test -x "${HERMES_UV}"; \
+    "${HERMES_UV}" pip install --python "${HERMES_VENV}/bin/python" 'python-telegram-bot==22.8'; \
+    "${HERMES_VENV}/bin/python" -c 'import telegram; print("python-telegram-bot", telegram.__version__)'; \
+    # Browser Harness is a separate CDP harness/skill. Bake the command and
+    # skill generated from the installed package for Hermes to use at runtime.
+    HOME=/opt/hermes "${HERMES_UV}" tool install --python 3.12 --upgrade --force 'browser-harness==0.1.6'; \
+    ln -sf /opt/hermes/.local/bin/browser-harness /usr/local/bin/browser-harness; \
+    mkdir -p /opt/hermes/default-skills/browser-harness; \
+    HOME=/opt/hermes XDG_CONFIG_HOME=/opt/hermes/.config \
+        browser-harness skill > /opt/hermes/default-skills/browser-harness/SKILL.md; \
+    test -s /opt/hermes/default-skills/browser-harness/SKILL.md; \
     # Make the baked trees world-readable for the abc user (skip any that the
     # installer layout did not create on this version).
     for d in /opt/hermes /usr/local/lib/hermes-agent /usr/local/share/uv; do \
@@ -87,10 +104,21 @@ RUN set -eux; \
         PATH="/opt/hermes/.hermes/node/bin:${PATH}" \
         HOME=/opt/hermes \
         npm --prefix /usr/local/lib/hermes-agent run build -w web; \
+        PATH="/opt/hermes/.hermes/node/bin:${PATH}" \
+        HOME=/opt/hermes \
+        npm --prefix /usr/local/lib/hermes-agent install --workspace ui-tui --include=dev --silent --no-fund --no-audit --progress=false; \
+        PATH="/opt/hermes/.hermes/node/bin:${PATH}" \
+        HOME=/opt/hermes \
+        npm --prefix /usr/local/lib/hermes-agent run build -w ui-tui; \
     fi
 
 # Persist Hermes state/config/keys in the mounted /config volume.
 ENV HERMES_HOME=/config/.hermes
+ENV HERMES_WEB_DIST=/usr/local/lib/hermes-agent/hermes_cli/web_dist
+ENV HERMES_TUI_DIR=/usr/local/lib/hermes-agent/ui-tui
+ENV BU_CDP_URL=http://127.0.0.1:9222
+ENV BROWSER_HARNESS_HOME=/config/.browser-harness
+ENV BH_HOME=/config/.browser-harness
 
 # ---------------------------------------------------------------------------
 # Drop in autostart, openbox menu, default Hermes config, init scripts, and the

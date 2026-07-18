@@ -7,8 +7,10 @@ case "${HERMES_DASHBOARD:-}" in
 esac
 
 export HERMES_HOME=/config/.hermes
+export HERMES_WEB_DIST="${HERMES_WEB_DIST:-/usr/local/lib/hermes-agent/hermes_cli/web_dist}"
+export HERMES_TUI_DIR="${HERMES_TUI_DIR:-/usr/local/lib/hermes-agent/ui-tui}"
 export HOME=/config
-export PATH="/usr/local/bin:/usr/bin:/bin"
+export PATH="/opt/hermes/.hermes/node/bin:/usr/local/bin:/usr/bin:/bin"
 
 dash_host="${HERMES_DASHBOARD_HOST:-0.0.0.0}"
 dash_port="${HERMES_DASHBOARD_PORT:-9119}"

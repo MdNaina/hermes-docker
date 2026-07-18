@@ -8,14 +8,33 @@
 # (not copies) keep them in sync with image upgrades and avoid bloating /config.
 
 HERMES_HOME=/config/.hermes
+BROWSER_HARNESS_HOME="${BROWSER_HARNESS_HOME:-/config/.browser-harness}"
 BAKED=/opt/hermes/.hermes
 
-mkdir -p "${HERMES_HOME}" /config/.brave
+mkdir -p "${HERMES_HOME}" /config/.brave "${BROWSER_HARNESS_HOME}"
+
+generate_secret() {
+    if command -v openssl >/dev/null 2>&1; then
+        openssl rand -hex 32
+    else
+        od -An -tx1 -N32 /dev/urandom | tr -d ' \n'
+    fi
+}
 
 # Seed the default Hermes config only if the user has none yet.
 if [ ! -f "${HERMES_HOME}/config.yaml" ] && [ -f /defaults/hermes/config.yaml ]; then
     cp /defaults/hermes/config.yaml "${HERMES_HOME}/config.yaml"
     echo "[hermes-init] Seeded default config at ${HERMES_HOME}/config.yaml"
+fi
+
+# Seed a minimal .env so gateway/dashboard can boot before provider credentials
+# are configured. Secrets are generated per mounted /config volume.
+if [ ! -f "${HERMES_HOME}/.env" ] && [ -f /defaults/hermes/minimal.env ]; then
+    cp /defaults/hermes/minimal.env "${HERMES_HOME}/.env"
+    sed -i "s/__GENERATED_API_SERVER_KEY__/$(generate_secret)/g" "${HERMES_HOME}/.env"
+    sed -i "s/__GENERATED_DASHBOARD_SECRET__/$(generate_secret)/g" "${HERMES_HOME}/.env"
+    chmod 600 "${HERMES_HOME}/.env" 2>/dev/null || true
+    echo "[hermes-init] Seeded minimal env at ${HERMES_HOME}/.env"
 fi
 
 # Link installer-managed runtime deps (Node for browser tools, managed uv).
@@ -29,14 +48,25 @@ done
 # the root-owned, world-readable baked trees.
 find "${HERMES_HOME}" -maxdepth 1 -mindepth 1 ! -type l -exec chown -R abc:abc {} + 2>/dev/null || true
 chown -h abc:abc "${HERMES_HOME}"/node "${HERMES_HOME}"/bin 2>/dev/null || true
-chown abc:abc "${HERMES_HOME}" /config/.brave 2>/dev/null || true
+chown abc:abc "${HERMES_HOME}" /config/.brave "${BROWSER_HARNESS_HOME}" 2>/dev/null || true
+
+# Register the Browser Harness skill generated from the exact installed package.
+if [ -s /opt/hermes/default-skills/browser-harness/SKILL.md ]; then
+    mkdir -p "${HERMES_HOME}/skills/browser-harness"
+    if [ ! -f "${HERMES_HOME}/skills/browser-harness/SKILL.md" ] \
+        || ! cmp -s /opt/hermes/default-skills/browser-harness/SKILL.md "${HERMES_HOME}/skills/browser-harness/SKILL.md"; then
+        cp /opt/hermes/default-skills/browser-harness/SKILL.md "${HERMES_HOME}/skills/browser-harness/SKILL.md"
+        echo "[hermes-init] Registered Browser Harness skill"
+    fi
+    chown -R abc:abc "${HERMES_HOME}/skills" 2>/dev/null || true
+fi
 
 # Stale Brave profile locks block a new window after a crash.
 rm -f /config/.brave/SingletonLock /config/.brave/SingletonSocket /config/.brave/SingletonCookie 2>/dev/null || true
 
 # Brave + Hermes terminal launch via /defaults/launch-desktop*.sh (see autostart).
 # Bump version when launch scripts or autostart change.
-DESKTOP_AUTOSTART_VERSION=4
+DESKTOP_AUTOSTART_VERSION=6
 sync_desktop_autostart() {
     local conf_dir="$1"
     local def_autostart="$2"
@@ -54,7 +84,9 @@ sync_desktop_autostart() {
         echo "[hermes-init] Refreshed desktop autostart at ${target}"
     fi
     if [ -n "${def_menu}" ] && [ -f "${def_menu}" ]; then
-        if [ ! -f "${conf_dir}/menu.xml" ] || ! grep -q 'brave-browser' "${conf_dir}/menu.xml" 2>/dev/null; then
+        if [ ! -f "${conf_dir}/menu.xml" ] \
+            || ! grep -q 'brave-browser' "${conf_dir}/menu.xml" 2>/dev/null \
+            || grep -q 'hermes-docker-setup' "${conf_dir}/menu.xml" 2>/dev/null; then
             cp "${def_menu}" "${conf_dir}/menu.xml"
             echo "[hermes-init] Refreshed desktop menu at ${conf_dir}/menu.xml"
         fi
@@ -64,6 +96,71 @@ sync_desktop_autostart() {
 
 sync_desktop_autostart /config/.config/openbox /defaults/autostart /defaults/menu.xml
 sync_desktop_autostart /config/.config/labwc /defaults/autostart_wayland /defaults/menu_wayland.xml
+
+config_has_browser_toolset() {
+    awk '
+        /^[[:space:]]*#/ { next }
+        /^toolsets:[[:space:]]*/ {
+            in_toolsets = 1
+            if ($0 ~ /(^|[^[:alnum:]_-])browser([^[:alnum:]_-]|$)/) found = 1
+            next
+        }
+        /^[^[:space:]][^:]*:/ { in_toolsets = 0 }
+        in_toolsets && /^[[:space:]]*-[[:space:]]*browser([[:space:]#]|$)/ { found = 1 }
+        END { exit found ? 0 : 1 }
+    ' "$1"
+}
+
+ensure_browser_toolset() {
+    local config="$1"
+    local tmp
+
+    if config_has_browser_toolset "${config}"; then
+        return 0
+    fi
+
+    tmp="$(mktemp)"
+    if grep -q '^toolsets:[[:space:]]*\[' "${config}" 2>/dev/null; then
+        awk '
+            /^toolsets:[[:space:]]*\[/ {
+                line = $0
+                sub(/^[^[]*\[/, "", line)
+                sub(/\].*$/, "", line)
+                print "toolsets:"
+                n = split(line, items, ",")
+                for (i = 1; i <= n; i++) {
+                    item = items[i]
+                    gsub(/^[[:space:]]+|[[:space:]]+$/, "", item)
+                    gsub(/^["'\''"]|["'\''"]$/, "", item)
+                    if (length(item) > 0) print "  - " item
+                }
+                print "  - browser"
+                next
+            }
+            { print }
+        ' "${config}" > "${tmp}" && mv "${tmp}" "${config}"
+    elif grep -q '^toolsets:' "${config}" 2>/dev/null; then
+        awk '
+            !done && /^toolsets:[[:space:]]*(#.*)?$/ {
+                print
+                print "  - browser"
+                done = 1
+                next
+            }
+            { print }
+        ' "${config}" > "${tmp}" && mv "${tmp}" "${config}"
+    else
+        cat "${config}" > "${tmp}"
+        cat >> "${tmp}" <<'EOF'
+
+toolsets:
+  - browser
+EOF
+        mv "${tmp}" "${config}"
+    fi
+    rm -f "${tmp}" 2>/dev/null || true
+    echo "[hermes-init] Added browser toolset to ${config}"
+}
 
 # If the user copied an existing Hermes home, ensure browser automation is configured.
 if [ -f "${HERMES_HOME}/config.yaml" ] && ! grep -q '^browser:' "${HERMES_HOME}/config.yaml" 2>/dev/null; then
@@ -75,11 +172,7 @@ EOF
     echo "[hermes-init] Appended browser.cdp_url to ${HERMES_HOME}/config.yaml"
     chown abc:abc "${HERMES_HOME}/config.yaml" 2>/dev/null || true
 fi
-if [ -f "${HERMES_HOME}/config.yaml" ] && ! grep -q 'browser' "${HERMES_HOME}/config.yaml" 2>/dev/null; then
-    if grep -q '^toolsets:' "${HERMES_HOME}/config.yaml" 2>/dev/null \
-        && ! grep -A20 '^toolsets:' "${HERMES_HOME}/config.yaml" | grep -q 'browser'; then
-        sed -i '/^toolsets:/a\  - browser' "${HERMES_HOME}/config.yaml"
-        echo "[hermes-init] Added browser toolset to ${HERMES_HOME}/config.yaml"
-        chown abc:abc "${HERMES_HOME}/config.yaml" 2>/dev/null || true
-    fi
+if [ -f "${HERMES_HOME}/config.yaml" ] && ! config_has_browser_toolset "${HERMES_HOME}/config.yaml"; then
+    ensure_browser_toolset "${HERMES_HOME}/config.yaml"
+    chown abc:abc "${HERMES_HOME}/config.yaml" 2>/dev/null || true
 fi

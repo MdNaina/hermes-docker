@@ -1,0 +1,11 @@
+.git
+.agents
+.codex
+.DS_Store
+
+# Generated host/server config and persistent runtime state.
+.env
+data/
+
+# Local/editor scratch.
+*.swp

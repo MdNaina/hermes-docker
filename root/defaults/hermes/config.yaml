@@ -1,10 +1,10 @@
 # Hermes Agent configuration template.
 #
 # Seeded into $HERMES_HOME (/config/.hermes/config.yaml) on first container
-# start if no config exists yet. Provider/model are intentionally left unset:
-# run `hermes setup` (or `hermes setup --portal`) once in the desktop terminal
-# to populate /config/.hermes/.env with your LLM provider + keys. That state
-# persists in the mounted /config volume and is shared by the CLI and gateway.
+# start if no config exists yet. For server deployments, run ./setup-hermes-env
+# on the host before docker compose up; it writes provider/model settings here
+# and secrets to data/.hermes/.env. That state persists in the mounted /config
+# volume and is shared by the CLI and gateway.
 
 # Enable the CLI tools plus browser automation.
 toolsets:
