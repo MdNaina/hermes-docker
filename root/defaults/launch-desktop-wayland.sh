@@ -2,14 +2,16 @@
 export HOME=/config
 export PATH="/usr/local/bin:/usr/bin:/bin:${PATH:-}"
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/config/.XDG}"
+export XDG_CACHE_HOME=/config/.cache
+export TMPDIR=/config/.cache/tmp
 
 LOG_DIR=/config/.hermes/logs
-mkdir -p "$LOG_DIR" /config/.brave
+mkdir -p "$LOG_DIR" /config/.brave "$TMPDIR"
 LOG="${LOG_DIR}/launch-desktop.log"
 
 {
     echo "=== launch-desktop-wayland $(date -Is) user=$(id -un) ==="
-    rm -f /config/.brave/SingletonLock /config/.brave/SingletonSocket /config/.brave/SingletonCookie
+    rm -rf /config/.brave/SingletonLock /config/.brave/SingletonSocket /config/.brave/SingletonCookie
 
     SOCKET="${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY:-wayland-1}"
     for _ in $(seq 1 60); do
@@ -41,5 +43,12 @@ LOG="${LOG_DIR}/launch-desktop.log"
     fi
 
     foot -T Hermes bash -lc "hermes || true; exec bash" &
+    case "${OBSIDIAN_AUTOSTART:-0}" in
+        1|true|TRUE|True|yes|YES|Yes)
+            if command -v obsidian >/dev/null 2>&1; then
+                setsid obsidian >>"${LOG_DIR}/obsidian-stdout.log" 2>>"${LOG_DIR}/obsidian-stderr.log" &
+            fi
+            ;;
+    esac
     wait
 } >>"$LOG" 2>&1

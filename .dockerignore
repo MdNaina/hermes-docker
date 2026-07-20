@@ -6,6 +6,7 @@
 # Generated host/server config and persistent runtime state.
 .env
 data/
+backups/
 
 # Local/editor scratch.
 *.swp

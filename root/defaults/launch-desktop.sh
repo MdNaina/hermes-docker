@@ -6,16 +6,18 @@
 export HOME=/config
 export DISPLAY="${DISPLAY:-:1}"
 export PATH="/usr/local/bin:/usr/bin:/bin:${PATH:-}"
+export XDG_CACHE_HOME=/config/.cache
+export TMPDIR=/config/.cache/tmp
 
 LOG_DIR=/config/.hermes/logs
-mkdir -p "$LOG_DIR" /config/.brave
+mkdir -p "$LOG_DIR" /config/.brave "$TMPDIR"
 LOG="${LOG_DIR}/launch-desktop.log"
 
 {
     echo "=== launch-desktop $(date -Is) user=$(id -un) DISPLAY=${DISPLAY} ==="
 
     # Stale locks prevent Brave from opening a second window after a crash.
-    rm -f /config/.brave/SingletonLock /config/.brave/SingletonSocket /config/.brave/SingletonCookie
+    rm -rf /config/.brave/SingletonLock /config/.brave/SingletonSocket /config/.brave/SingletonCookie
 
     for _ in $(seq 1 60); do
         if xset q &>/dev/null; then
@@ -49,6 +51,15 @@ LOG="${LOG_DIR}/launch-desktop.log"
 
     xterm -geometry 120x32 -title "Hermes" -e bash -lc "hermes || true; exec bash" &
     echo "xterm pid=$!"
+
+    case "${OBSIDIAN_AUTOSTART:-0}" in
+        1|true|TRUE|True|yes|YES|Yes)
+            if command -v obsidian >/dev/null 2>&1; then
+                setsid obsidian >>"${LOG_DIR}/obsidian-stdout.log" 2>>"${LOG_DIR}/obsidian-stderr.log" &
+                echo "obsidian pid=$!"
+            fi
+            ;;
+    esac
 
     # Ensure gateway starts once .env exists (covers setup-after-boot).
     (

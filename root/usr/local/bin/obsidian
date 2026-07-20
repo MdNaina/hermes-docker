@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export HOME="${HOME:-/config}"
+mkdir -p "${HOME}/.config/obsidian" "${HOME}/Documents/Obsidian"
+
+# AppImage FUSE is not reliable in containers, so extract-and-run is the
+# predictable path. Electron sandboxing also needs to be disabled in Docker.
+exec env APPIMAGE_EXTRACT_AND_RUN=1 /opt/obsidian/Obsidian.AppImage --no-sandbox "$@"

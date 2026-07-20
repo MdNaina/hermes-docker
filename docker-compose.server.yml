@@ -1,0 +1,18 @@
+# Optional server override for attaching Hermes to an existing reverse-proxy or
+# VPN network. Use with:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.server.yml up -d
+#
+# Create the external network first, or set HERMES_REVERSE_PROXY_NETWORK to the
+# name your proxy already uses. This override does not publish any host ports.
+
+services:
+  hermes-server:
+    networks:
+      - hermes-private
+      - hermes-edge
+
+networks:
+  hermes-edge:
+    external: true
+    name: ${HERMES_REVERSE_PROXY_NETWORK:-hermes-edge}

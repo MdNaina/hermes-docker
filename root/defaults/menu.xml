@@ -11,6 +11,11 @@
         <command>xterm -geometry 120x32 -title "Hermes" -e bash -lc "hermes || true; exec bash"</command>
       </action>
     </item>
+    <item label="Obsidian">
+      <action name="Execute">
+        <command>obsidian</command>
+      </action>
+    </item>
     <item label="Terminal">
       <action name="Execute">
         <command>xterm</command>

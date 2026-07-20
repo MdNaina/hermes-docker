@@ -1,6 +1,8 @@
 # Runtime persistent volume (Hermes state, Brave profile, keys)
-/data/
 /.env
+/data/*
+!/data/README.md
+/backups/
 
 # OS / editor cruft
 .DS_Store

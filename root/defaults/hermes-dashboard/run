@@ -25,13 +25,20 @@ if [ "$dash_host" != "127.0.0.1" ] && [ "$dash_host" != "localhost" ]; then
 fi
 
 echo "[hermes-dashboard] waiting for gateway on :${api_port} ..."
+gateway_ready=false
 for _ in $(seq 1 120); do
     if curl -sf "http://127.0.0.1:${api_port}/" >/dev/null 2>&1 \
         || curl -sf "http://127.0.0.1:${api_port}/health" >/dev/null 2>&1; then
+        gateway_ready=true
         break
     fi
     sleep 2
 done
+
+if [ "${gateway_ready}" != true ]; then
+    echo "[hermes-dashboard] gateway did not become ready on :${api_port}" >&2
+    exit 78
+fi
 
 [ "$(id -u)" = 0 ] || exec hermes dashboard --host "$dash_host" --port "$dash_port" --no-open
 exec s6-setuidgid abc hermes dashboard --host "$dash_host" --port "$dash_port" --no-open

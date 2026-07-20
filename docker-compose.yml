@@ -1,18 +1,14 @@
-services:
-  hermes-docker:
+x-hermes-common: &hermes-common
     build: .
     image: hermes-docker
     container_name: ${HERMES_CONTAINER_NAME:-hermes-docker}
-    # Chromium/Brave needs a larger /dev/shm and an unconfined seccomp profile
-    # to run inside Docker (paired with --no-sandbox in autostart).
+    # Chromium/Brave needs a larger /dev/shm and, in this Selkies desktop
+    # image, an unconfined seccomp profile paired with Brave --no-sandbox.
+    # Do not run privileged or with host networking.
+    privileged: false
     shm_size: "2gb"
     security_opt:
       - seccomp:unconfined
-    ports:
-      - "${HERMES_BIND_ADDRESS:-127.0.0.1}:${HERMES_DESKTOP_HTTPS_HOST_PORT:-3001}:3001"   # Selkies desktop (HTTPS)
-      - "${HERMES_BIND_ADDRESS:-127.0.0.1}:${HERMES_DESKTOP_HTTP_HOST_PORT:-3000}:3000"     # Selkies desktop (HTTP, optional)
-      - "${HERMES_BIND_ADDRESS:-127.0.0.1}:${HERMES_GATEWAY_HOST_PORT:-8642}:8642"          # Hermes gateway API / messaging (/health)
-      - "${HERMES_BIND_ADDRESS:-127.0.0.1}:${HERMES_DASHBOARD_HOST_PORT:-9119}:9119"        # Hermes web dashboard (when HERMES_DASHBOARD=1)
     environment:
       # ---- Selkies web desktop ----
       - CUSTOM_USER=${CUSTOM_USER:?run ./setup-hermes-env first}
@@ -38,12 +34,23 @@ services:
       - BROWSER_HARNESS_HOME=${BROWSER_HARNESS_HOME:-/config/.browser-harness}
       - BH_HOME=${BH_HOME:-/config/.browser-harness}
       - BH_DOMAIN_SKILLS=${BH_DOMAIN_SKILLS:-0}
+      - FASTER_WHISPER_HOME=${FASTER_WHISPER_HOME:-/config/.cache/faster-whisper}
+      - HF_HOME=${HF_HOME:-/config/.cache/huggingface}
+      - OBSIDIAN_AUTOSTART=${OBSIDIAN_AUTOSTART:-0}
       # Required for 0.0.0.0 bind (non-loopback). Change these — do not use defaults on the public internet.
       - HERMES_DASHBOARD_BASIC_AUTH_USERNAME=${HERMES_DASHBOARD_BASIC_AUTH_USERNAME:?run ./setup-hermes-env first}
       - HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=${HERMES_DASHBOARD_BASIC_AUTH_PASSWORD:?run ./setup-hermes-env first}
     volumes:
-      - ./data:/config
+      - ${HERMES_CONFIG_VOLUME:-./data}:/config
     restart: unless-stopped
+    networks:
+      - hermes-private
+    healthcheck:
+      test: ["CMD", "hermes-smoke-check", "gateway"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
     # ---- Optional GPU acceleration for Wayland mode ----
     # Intel / AMD: expose the render node
     # devices:
@@ -56,3 +63,25 @@ services:
     #         - driver: nvidia
     #           count: 1
     #           capabilities: [compute, video, graphics, utility]
+
+services:
+  hermes-local:
+    <<: *hermes-common
+    profiles: ["local"]
+    ports:
+      - "${HERMES_BIND_ADDRESS:-127.0.0.1}:${HERMES_DESKTOP_HTTPS_HOST_PORT:-3001}:3001"   # Selkies desktop (HTTPS)
+      - "${HERMES_BIND_ADDRESS:-127.0.0.1}:${HERMES_DESKTOP_HTTP_HOST_PORT:-3000}:3000"     # Selkies desktop (HTTP, optional)
+      - "${HERMES_BIND_ADDRESS:-127.0.0.1}:${HERMES_GATEWAY_HOST_PORT:-8642}:8642"          # Hermes gateway API / messaging (/health)
+      - "${HERMES_BIND_ADDRESS:-127.0.0.1}:${HERMES_DASHBOARD_HOST_PORT:-9119}:9119"        # Hermes web dashboard (when HERMES_DASHBOARD=1)
+
+  hermes-server:
+    <<: *hermes-common
+    profiles: ["server"]
+    expose:
+      - "3001" # Selkies desktop HTTPS for reverse proxy/VPN only
+      - "8642" # Hermes gateway API / messaging
+      - "9119" # Hermes dashboard
+
+networks:
+  hermes-private:
+    driver: bridge

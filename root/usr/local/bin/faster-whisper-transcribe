@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export HOME="${HOME:-/config}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-/config/.cache}"
+export HF_HOME="${HF_HOME:-/config/.cache/huggingface}"
+export FASTER_WHISPER_HOME="${FASTER_WHISPER_HOME:-/config/.cache/faster-whisper}"
+mkdir -p "${XDG_CACHE_HOME}" "${HF_HOME}" "${FASTER_WHISPER_HOME}"
+
+exec /opt/faster-whisper/venv/bin/python - "$@" <<'PY'
+import argparse
+import json
+import os
+import sys
+
+from faster_whisper import WhisperModel
+
+
+def write_srt_timestamp(seconds):
+    millis = int(round(seconds * 1000))
+    hours, rem = divmod(millis, 3600_000)
+    minutes, rem = divmod(rem, 60_000)
+    secs, millis = divmod(rem, 1000)
+    return f"{hours:02}:{minutes:02}:{secs:02},{millis:03}"
+
+
+def write_vtt_timestamp(seconds):
+    return write_srt_timestamp(seconds).replace(",", ".")
+
+
+parser = argparse.ArgumentParser(
+    description="Transcribe audio/video with faster-whisper."
+)
+parser.add_argument("input", help="Audio or video file to transcribe")
+parser.add_argument(
+    "-m",
+    "--model",
+    default=os.environ.get("FASTER_WHISPER_MODEL", "base"),
+    help="Whisper model size or local CTranslate2 model path (default: base)",
+)
+parser.add_argument(
+    "-d",
+    "--device",
+    default=os.environ.get("FASTER_WHISPER_DEVICE", "cpu"),
+    choices=("cpu", "cuda", "auto"),
+    help="Inference device (default: cpu)",
+)
+parser.add_argument(
+    "-c",
+    "--compute-type",
+    default=os.environ.get("FASTER_WHISPER_COMPUTE_TYPE", "int8"),
+    help="CTranslate2 compute type (default: int8)",
+)
+parser.add_argument(
+    "-l",
+    "--language",
+    default=os.environ.get("FASTER_WHISPER_LANGUAGE"),
+    help="Optional language code, such as en or hi",
+)
+parser.add_argument(
+    "--beam-size",
+    type=int,
+    default=int(os.environ.get("FASTER_WHISPER_BEAM_SIZE", "5")),
+    help="Beam size (default: 5)",
+)
+parser.add_argument(
+    "--vad-filter",
+    action="store_true",
+    default=os.environ.get("FASTER_WHISPER_VAD_FILTER", "").lower() in {"1", "true", "yes"},
+    help="Enable voice activity detection filtering",
+)
+parser.add_argument(
+    "--cache-dir",
+    default=os.environ.get("FASTER_WHISPER_HOME", "/config/.cache/faster-whisper"),
+    help="Model download/cache directory",
+)
+parser.add_argument(
+    "-f",
+    "--format",
+    choices=("text", "json", "srt", "vtt"),
+    default="text",
+    help="Output format (default: text)",
+)
+
+args = parser.parse_args()
+
+model = WhisperModel(
+    args.model,
+    device=args.device,
+    compute_type=args.compute_type,
+    download_root=args.cache_dir,
+)
+segments, info = model.transcribe(
+    args.input,
+    language=args.language,
+    beam_size=args.beam_size,
+    vad_filter=args.vad_filter,
+)
+segments = list(segments)
+
+if args.format == "json":
+    print(json.dumps({
+        "language": info.language,
+        "language_probability": info.language_probability,
+        "duration": info.duration,
+        "segments": [
+            {"start": s.start, "end": s.end, "text": s.text.strip()}
+            for s in segments
+        ],
+    }, ensure_ascii=False, indent=2))
+elif args.format == "srt":
+    for index, segment in enumerate(segments, start=1):
+        print(index)
+        print(f"{write_srt_timestamp(segment.start)} --> {write_srt_timestamp(segment.end)}")
+        print(segment.text.strip())
+        print()
+elif args.format == "vtt":
+    print("WEBVTT\n")
+    for segment in segments:
+        print(f"{write_vtt_timestamp(segment.start)} --> {write_vtt_timestamp(segment.end)}")
+        print(segment.text.strip())
+        print()
+else:
+    for segment in segments:
+        print(segment.text.strip(), flush=True)
+
+sys.exit(0)
+PY

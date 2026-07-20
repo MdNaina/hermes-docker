@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+mode="${1:-all}"
+
+dashboard_enabled() {
+    case "${HERMES_DASHBOARD:-}" in
+        1|true|TRUE|True|yes|YES|Yes) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+check_gateway() {
+    local port="${API_SERVER_PORT:-8642}"
+    curl -fsS "http://127.0.0.1:${port}/health" >/dev/null
+}
+
+check_dashboard() {
+    if ! dashboard_enabled; then
+        return 0
+    fi
+
+    local host="${HERMES_DASHBOARD_HOST:-127.0.0.1}"
+    local port="${HERMES_DASHBOARD_PORT:-9119}"
+    local user="${HERMES_DASHBOARD_BASIC_AUTH_USERNAME:-}"
+    local password="${HERMES_DASHBOARD_BASIC_AUTH_PASSWORD:-}"
+
+    if [ -n "${user}" ] && [ -n "${password}" ]; then
+        curl -fsS -u "${user}:${password}" "http://127.0.0.1:${port}/" >/dev/null
+    elif [ "${host}" = "127.0.0.1" ] || [ "${host}" = "localhost" ]; then
+        curl -fsS "http://127.0.0.1:${port}/" >/dev/null
+    else
+        echo "dashboard auth is required for non-loopback bind" >&2
+        return 1
+    fi
+}
+
+check_cdp() {
+    curl -fsS "http://127.0.0.1:9222/json/version" >/dev/null
+}
+
+check_browser_harness() {
+    BU_CDP_URL="${BU_CDP_URL:-http://127.0.0.1:9222}" browser-harness <<'PY' >/dev/null
+print(page_info())
+PY
+}
+
+check_faster_whisper() {
+    faster-whisper-transcribe --help >/dev/null
+}
+
+case "${mode}" in
+    gateway) check_gateway ;;
+    dashboard) check_dashboard ;;
+    cdp|brave) check_cdp ;;
+    browser-harness) check_browser_harness ;;
+    faster-whisper|whisper) check_faster_whisper ;;
+    all)
+        check_gateway
+        check_dashboard
+        check_cdp
+        check_browser_harness
+        check_faster_whisper
+        ;;
+    *)
+        echo "usage: hermes-smoke-check [gateway|dashboard|cdp|browser-harness|faster-whisper|all]" >&2
+        exit 64
+        ;;
+esac
