@@ -140,10 +140,18 @@ if [ "${MODE}" = "lean" ]; then
 /README.md
 EOF
 else
-    : > "${exclude_file}"
+    cat > "${exclude_file}" <<'EOF'
+/.X11-unix/
+/.XDG/
+/.dbus/
+/.config/pulse/
+/.brave/SingletonSocket
+/.brave/SingletonLock
+/.brave/SingletonCookie
+EOF
 fi
 
-rsync_args=(-a --delete --exclude-from "${exclude_file}")
+rsync_args=(-a --quiet --no-devices --no-specials --delete --exclude-from "${exclude_file}")
 if [ -L "${LATEST_LINK}" ] && [ -d "${LATEST_LINK}" ]; then
     rsync_args+=(--link-dest "$(cd "${LATEST_LINK}" && pwd)")
 fi
@@ -169,6 +177,7 @@ if [ "${WRITE_ZIP}" = true ]; then
     echo "Writing portable zip archive: ${ZIP_DEST}"
     (
         cd "${DEST}"
+        find . -type s -delete
         zip -qry "${ZIP_DEST}" .
     )
     ln -sfn "$(basename "${ZIP_DEST}")" "${LATEST_ZIP_LINK}"

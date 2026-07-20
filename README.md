@@ -333,6 +333,8 @@ By default it:
 - skips bulky regenerable caches and logs such as `.cache`, `.npm`,
   `.hermes/logs`, Brave cache directories, Safe Browsing databases, and component
   update caches
+- skips runtime-only sockets, device files, and browser lock files that cannot be
+  restored usefully
 
 Later lean backups use hard links against the previous snapshot, so they are much
 faster and usually much smaller while still looking like complete backup folders.
