@@ -135,6 +135,12 @@ available when you open the Selkies desktop. In the `server` profile those ports
 are internal only. `http://localhost:8642/` may return `404`; use
 `http://localhost:8642/health` for the gateway health check.
 
+The dashboard frontend is not prebuilt by default because its npm dependency
+tree is large enough to overflow small Docker Desktop builder disks. Hermes can
+build it on first dashboard launch when npm is available. On a server with enough
+Docker disk, set `PREBUILD_HERMES_UI=true` in `.env` before building to bake the
+dashboard web/TUI assets into the image.
+
 With a Nous Portal subscription, the wizard can write the model choice, but OAuth
 still requires a browser login. Run `hermes setup --portal` once from the desktop
 if `$HERMES_CONFIG_VOLUME/.hermes/auth.json` is not already present.
@@ -330,6 +336,8 @@ By default it:
 - updates `backups/latest-lean`
 - keeps Hermes auth/config/databases, skills, Browser Harness state, Obsidian
   files, and Brave profile/session state
+- stores Compose `.env` as backup metadata so a fresh clone can restore the
+  deployment profile, credentials, and ports
 - skips bulky regenerable caches and logs such as `.cache`, `.npm`,
   `.hermes/logs`, Brave cache directories, Safe Browsing databases, and component
   update caches
@@ -376,10 +384,29 @@ Restore from a portable zip:
 scripts/restore.sh ./backups/20260720T120000Z-lean.zip --yes
 ```
 
-Restore stops and restarts the configured container by default, syncs the backup
-into `HERMES_CONFIG_VOLUME`, and deletes files in the target that are not present
-in the snapshot. Backups contain cookies, OAuth tokens, API keys, and agent
-memory; store them encrypted.
+Restore stops the configured container by default, syncs the backup into
+`HERMES_CONFIG_VOLUME`, deletes files in the target that are not present in the
+snapshot, then runs `docker compose build` and `docker compose up -d`. That final
+step installs image-baked tools such as `faster-whisper`, Browser Harness,
+Obsidian, and the Hermes runtime on a fresh server.
+
+If the project `.env` is missing during restore, the script recreates it from
+backup metadata and rewrites `HERMES_CONFIG_VOLUME` / `HERMES_BACKUP_DIR` for the
+new server path.
+
+Useful restore variants:
+
+```bash
+scripts/restore.sh ./backups/latest-lean.zip --yes --pull
+scripts/restore.sh ./backups/latest-lean.zip --yes --profile local
+scripts/restore.sh ./backups/latest-lean --yes --data-only
+```
+
+`--pull` refreshes base images during the build. `--profile` chooses the Compose
+profile for build/start and defaults to `.env` `COMPOSE_PROFILES`, or `server`
+when older env files do not have one. `--data-only` only restores files and skips
+rebuilding/starting Docker. Backups contain cookies, OAuth tokens, API keys, and
+agent memory; store them encrypted.
 
 | Mode | How | Notes |
 | --- | --- | --- |
@@ -408,6 +435,10 @@ docker run ... --gpus all --runtime nvidia -e PIXELFLUX_WAYLAND=true -e AUTO_GPU
 | `HERMES_CONFIG_VOLUME` | external path for `server`, `./data` for `local` | Host path mounted as `/config`; contains secrets and browser state |
 | `HERMES_BACKUP_DIR` | `./backups` | Host path for incremental backup snapshots |
 | `HERMES_REVERSE_PROXY_NETWORK` | `hermes-edge` | External network name used by `docker-compose.server.yml` |
+| `INSTALL_OPTIONAL_BUILD_TOOLS` | `false` | Build arg for optional packages such as `build-essential` and `ffmpeg` |
+| `OBSIDIAN_VERSION` | `1.12.7` | Obsidian AppImage version baked into the image |
+| `PREBUILD_HERMES_UI` | `false` | Build arg to prebuild Hermes dashboard web/TUI assets; keep off on small Docker disks |
+| `FASTER_WHISPER_VERSION` | `1.2.1` | faster-whisper package version baked into the image |
 | `HERMES_DESKTOP_HTTPS_HOST_PORT` | `3001` | Published host port for Selkies HTTPS |
 | `HERMES_DESKTOP_HTTP_HOST_PORT` | `3000` | Published host port for Selkies HTTP |
 | `HERMES_GATEWAY_HOST_PORT` | `8642` | Published host port for the Hermes gateway |
@@ -464,6 +495,11 @@ when needed:
 ```bash
 docker build --build-arg INSTALL_OPTIONAL_BUILD_TOOLS=true -t hermes-docker .
 ```
+
+The Hermes dashboard web/TUI asset prebuild is also optional. The default
+Compose build leaves `PREBUILD_HERMES_UI=false` so constrained machines can build
+the image; set it to `true` only when you want the first dashboard launch to avoid
+its automatic npm build and you have enough Docker disk space.
 
 If the default build still fails on a tiny package, Docker Desktop's Linux disk is
 full rather than the image step being too large. Check:

@@ -170,6 +170,10 @@ write_compose_env() {
         printf 'COMPOSE_PROFILES=%s\n' "$(dotenv_quote "${deployment_profile}")"
         printf 'HERMES_CONFIG_VOLUME=%s\n' "$(dotenv_quote "${runtime_data_dir}")"
         printf 'HERMES_BACKUP_DIR=%s\n' "$(dotenv_quote "${runtime_data_dir%/}-backups")"
+        printf 'INSTALL_OPTIONAL_BUILD_TOOLS=false\n'
+        printf 'OBSIDIAN_VERSION=%s\n' "$(dotenv_quote "1.12.7")"
+        printf 'PREBUILD_HERMES_UI=false\n'
+        printf 'FASTER_WHISPER_VERSION=%s\n' "$(dotenv_quote "1.2.1")"
         printf 'CUSTOM_USER=%s\n' "$(dotenv_quote "${desktop_user}")"
         printf 'PASSWORD=%s\n' "$(dotenv_quote "${desktop_password}")"
         printf 'TITLE=%s\n' "$(dotenv_quote "Hermes Desktop")"

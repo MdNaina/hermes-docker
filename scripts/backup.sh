@@ -167,6 +167,12 @@ container=${CONTAINER_NAME}
 stopped_container=${container_was_running}
 EOF
 
+mkdir -p "${DEST}/.hermes-docker"
+if [ -f "${PROJECT_DIR}/.env" ]; then
+    cp "${PROJECT_DIR}/.env" "${DEST}/.hermes-docker/compose.env"
+    chmod 600 "${DEST}/.hermes-docker/compose.env" 2>/dev/null || true
+fi
+
 ln -sfn "$(basename "${DEST}")" "${LATEST_LINK}"
 
 if [ "${WRITE_ZIP}" = true ]; then

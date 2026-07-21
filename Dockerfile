@@ -82,6 +82,7 @@ RUN set -eux; \
 # We do NOT touch /usr/local/bin/hermes (the installer already created the real
 # launcher there) and make the baked trees world-readable for the abc user.
 # ---------------------------------------------------------------------------
+ARG PREBUILD_HERMES_UI=false
 RUN set -eux; \
     dpkg_arch="$(dpkg --print-architecture)"; \
     case "${dpkg_arch}" in \
@@ -89,7 +90,15 @@ RUN set -eux; \
         arm64) export PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu24.04-arm64 ;; \
         *) echo "Unsupported Playwright architecture: ${dpkg_arch}" >&2; exit 1 ;; \
     esac; \
-    HOME=/opt/hermes bash -c 'curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash'; \
+    curl -fsSL https://hermes-agent.nousresearch.com/install.sh -o /tmp/hermes-install.sh; \
+    chmod +x /tmp/hermes-install.sh; \
+    # Run the upstream installer in stage mode so this image can skip the
+    # heavyweight Playwright/browser dependency stage. Browser work is handled by
+    # the visible Brave + Browser Harness path below.
+    for stage in prerequisites repository venv python-deps path config complete; do \
+        HOME=/opt/hermes bash /tmp/hermes-install.sh --stage "${stage}" --non-interactive; \
+    done; \
+    rm -f /tmp/hermes-install.sh; \
     # The installer (run as root) creates the launcher on PATH; self-heal to the
     # venv entrypoint if its name/location differs, then assert it works.
     if [ ! -x /usr/local/bin/hermes ]; then \
@@ -100,16 +109,23 @@ RUN set -eux; \
     # bundled by the default installer). Bake it so TELEGRAM_* vars in .env work.
     HERMES_VENV=/usr/local/lib/hermes-agent/venv; \
     HERMES_UV=/opt/hermes/.hermes/bin/uv; \
+    UV_CACHE_DIR=/tmp/uv-cache; \
+    export HOME=/opt/hermes; \
+    export UV_CACHE_DIR; \
+    export UV_PYTHON_INSTALL_DIR=/usr/local/share/uv/python; \
+    export UV_PYTHON_BIN_DIR=/usr/local/share/uv/bin; \
+    rm -rf "${UV_CACHE_DIR}"; \
+    mkdir -p "${UV_CACHE_DIR}"; \
     test -x "${HERMES_VENV}/bin/python"; \
     test -x "${HERMES_UV}"; \
     "${HERMES_UV}" pip install --python "${HERMES_VENV}/bin/python" 'python-telegram-bot==22.8'; \
     "${HERMES_VENV}/bin/python" -c 'import telegram; print("python-telegram-bot", telegram.__version__)'; \
     # Browser Harness is a separate CDP harness/skill. Bake the command and
     # skill generated from the installed package for Hermes to use at runtime.
-    HOME=/opt/hermes "${HERMES_UV}" tool install --python 3.12 --upgrade --force 'browser-harness==0.1.6'; \
+    "${HERMES_UV}" tool install --python 3.12 --upgrade --force 'browser-harness==0.1.6'; \
     ln -sf /opt/hermes/.local/bin/browser-harness /usr/local/bin/browser-harness; \
     mkdir -p /opt/hermes/default-skills/browser-harness; \
-    HOME=/opt/hermes XDG_CONFIG_HOME=/opt/hermes/.config \
+    XDG_CONFIG_HOME=/opt/hermes/.config \
         browser-harness skill > /opt/hermes/default-skills/browser-harness/SKILL.md; \
     test -s /opt/hermes/default-skills/browser-harness/SKILL.md; \
     # Make the baked trees world-readable for the abc user (skip any that the
@@ -117,27 +133,38 @@ RUN set -eux; \
     for d in /opt/hermes /usr/local/lib/hermes-agent /usr/local/share/uv; do \
         if [ -e "$d" ]; then chmod -R a+rX "$d"; fi; \
     done; \
-    # Pre-build the Hermes dashboard web UI so `hermes dashboard` does not npm install at runtime.
-    # Prefer the upstream lockfile when present; fall back to install because the
-    # remote Hermes installer owns this tree and may change packaging format.
-    if [ -d /usr/local/lib/hermes-agent ] && [ -x /opt/hermes/.hermes/node/bin/npm ]; then \
+    rm -rf /opt/hermes/.cache /opt/hermes/.npm /root/.cache /config/.cache/uv /tmp/*; \
+    # Optional: pre-build the Hermes dashboard web UI so `hermes dashboard` does
+    # not npm install at runtime. This is disabled by default because the Hermes
+    # web/TUI dependency tree can exceed small Docker Desktop builder disks.
+    if [ "${PREBUILD_HERMES_UI}" = "true" ] && [ -d /usr/local/lib/hermes-agent ] && [ -x /opt/hermes/.hermes/node/bin/npm ]; then \
         if [ -f /usr/local/lib/hermes-agent/package-lock.json ]; then \
             npm_install_cmd=ci; \
         else \
             npm_install_cmd=install; \
         fi; \
+        npm_cache_dir=/tmp/npm-cache; \
+        rm -rf "${npm_cache_dir}"; \
+        mkdir -p "${npm_cache_dir}"; \
         PATH="/opt/hermes/.hermes/node/bin:${PATH}" \
         HOME=/opt/hermes \
+        npm_config_cache="${npm_cache_dir}" \
         npm --prefix /usr/local/lib/hermes-agent "${npm_install_cmd}" --workspace web --no-fund --no-audit --progress=false; \
         PATH="/opt/hermes/.hermes/node/bin:${PATH}" \
         HOME=/opt/hermes \
+        npm_config_cache="${npm_cache_dir}" \
         npm --prefix /usr/local/lib/hermes-agent run build -w web; \
         PATH="/opt/hermes/.hermes/node/bin:${PATH}" \
         HOME=/opt/hermes \
+        npm_config_cache="${npm_cache_dir}" \
         npm --prefix /usr/local/lib/hermes-agent "${npm_install_cmd}" --workspace ui-tui --include=dev --silent --no-fund --no-audit --progress=false; \
         PATH="/opt/hermes/.hermes/node/bin:${PATH}" \
         HOME=/opt/hermes \
+        npm_config_cache="${npm_cache_dir}" \
         npm --prefix /usr/local/lib/hermes-agent run build -w ui-tui; \
+        rm -rf "${npm_cache_dir}" /opt/hermes/.npm; \
+    else \
+        echo "Skipping Hermes web/TUI prebuild (PREBUILD_HERMES_UI=${PREBUILD_HERMES_UI})"; \
     fi
 
 # Keep local speech-to-text isolated from Hermes itself. Models are not
@@ -145,12 +172,20 @@ RUN set -eux; \
 ARG FASTER_WHISPER_VERSION=1.2.1
 RUN set -eux; \
     HERMES_UV=/opt/hermes/.hermes/bin/uv; \
+    UV_CACHE_DIR=/tmp/uv-cache; \
+    export HOME=/opt/hermes; \
+    export UV_CACHE_DIR; \
+    export UV_PYTHON_INSTALL_DIR=/usr/local/share/uv/python; \
+    export UV_PYTHON_BIN_DIR=/usr/local/share/uv/bin; \
+    rm -rf "${UV_CACHE_DIR}" /config/.cache/uv; \
+    mkdir -p "${UV_CACHE_DIR}"; \
     test -x "${HERMES_UV}"; \
     mkdir -p /opt/faster-whisper; \
     "${HERMES_UV}" venv --python 3.12 /opt/faster-whisper/venv; \
     "${HERMES_UV}" pip install --python /opt/faster-whisper/venv/bin/python \
         "faster-whisper==${FASTER_WHISPER_VERSION}"; \
     /opt/faster-whisper/venv/bin/python -c 'import importlib.metadata as m; print("faster-whisper", m.version("faster-whisper"))'; \
+    rm -rf "${UV_CACHE_DIR}" /config/.cache/uv /opt/hermes/.cache/uv; \
     chmod -R a+rX /opt/faster-whisper
 
 # Persist Hermes state/config/keys in the mounted /config volume.

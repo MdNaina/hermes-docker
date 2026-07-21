@@ -1,5 +1,11 @@
 x-hermes-common: &hermes-common
-    build: .
+    build:
+      context: .
+      args:
+        INSTALL_OPTIONAL_BUILD_TOOLS: ${INSTALL_OPTIONAL_BUILD_TOOLS:-false}
+        OBSIDIAN_VERSION: ${OBSIDIAN_VERSION:-1.12.7}
+        PREBUILD_HERMES_UI: ${PREBUILD_HERMES_UI:-false}
+        FASTER_WHISPER_VERSION: ${FASTER_WHISPER_VERSION:-1.2.1}
     image: hermes-docker
     container_name: ${HERMES_CONTAINER_NAME:-hermes-docker}
     # Chromium/Brave needs a larger /dev/shm and, in this Selkies desktop
