@@ -227,6 +227,8 @@ seed_hermes_runtime_env() {
     upsert_hermes_env BH_HOME /config/.browser-harness
     upsert_hermes_env BH_DOMAIN_SKILLS 0
     upsert_hermes_env BROWSER_INACTIVITY_TIMEOUT 3600
+    upsert_hermes_env HERMES_LOCAL_STT_COMMAND 'faster-whisper-transcribe {input_path} --model {model} --language {language} --format text > {output_dir}/transcript.txt'
+    upsert_hermes_env HERMES_LOCAL_STT_LANGUAGE en
     if ! grep -q '^HERMES_DASHBOARD_BASIC_AUTH_SECRET=' "${HERMES_ENV}" 2>/dev/null; then
         upsert_hermes_env HERMES_DASHBOARD_BASIC_AUTH_SECRET "$(generate_secret)"
     fi

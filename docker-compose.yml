@@ -34,8 +34,6 @@ x-hermes-common: &hermes-common
       - HERMES_DASHBOARD=${HERMES_DASHBOARD:-1}
       - HERMES_DASHBOARD_HOST=${HERMES_DASHBOARD_HOST:-0.0.0.0}
       - HERMES_DASHBOARD_PORT=${HERMES_DASHBOARD_PORT:-9119}
-      - HERMES_WEB_DIST=/usr/local/lib/hermes-agent/hermes_cli/web_dist
-      - HERMES_TUI_DIR=/usr/local/lib/hermes-agent/ui-tui
       - BU_CDP_URL=${BU_CDP_URL:-http://127.0.0.1:9222}
       - BROWSER_HARNESS_HOME=${BROWSER_HARNESS_HOME:-/config/.browser-harness}
       - BH_HOME=${BH_HOME:-/config/.browser-harness}

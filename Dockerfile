@@ -32,6 +32,7 @@ RUN set -eux; \
         gnupg \
         xz-utils \
         apt-transport-https \
+        ffmpeg \
         ripgrep \
         wmctrl \
         xterm; \
@@ -40,8 +41,7 @@ RUN set -eux; \
     if [ "${INSTALL_OPTIONAL_BUILD_TOOLS}" = "true" ]; then \
         apt-get update; \
         DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            build-essential \
-            ffmpeg; \
+            build-essential; \
         apt-get clean; \
         rm -rf /var/cache/apt/archives/*.deb /var/lib/apt/lists/*; \
     fi; \
@@ -118,8 +118,11 @@ RUN set -eux; \
     mkdir -p "${UV_CACHE_DIR}"; \
     test -x "${HERMES_VENV}/bin/python"; \
     test -x "${HERMES_UV}"; \
-    "${HERMES_UV}" pip install --python "${HERMES_VENV}/bin/python" 'python-telegram-bot==22.8'; \
+    "${HERMES_UV}" pip install --python "${HERMES_VENV}/bin/python" \
+        'python-telegram-bot==22.8' \
+        'edge-tts==7.2.7'; \
     "${HERMES_VENV}/bin/python" -c 'import telegram; print("python-telegram-bot", telegram.__version__)'; \
+    "${HERMES_VENV}/bin/python" -c 'import edge_tts; print("edge-tts ready")'; \
     # Browser Harness is a separate CDP harness/skill. Bake the command and
     # skill generated from the installed package for Hermes to use at runtime.
     "${HERMES_UV}" tool install --python 3.12 --upgrade --force 'browser-harness==0.1.6'; \
@@ -190,8 +193,6 @@ RUN set -eux; \
 
 # Persist Hermes state/config/keys in the mounted /config volume.
 ENV HERMES_HOME=/config/.hermes
-ENV HERMES_WEB_DIST=/usr/local/lib/hermes-agent/hermes_cli/web_dist
-ENV HERMES_TUI_DIR=/usr/local/lib/hermes-agent/ui-tui
 ENV BU_CDP_URL=http://127.0.0.1:9222
 ENV BROWSER_HARNESS_HOME=/config/.browser-harness
 ENV BH_HOME=/config/.browser-harness

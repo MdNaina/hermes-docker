@@ -218,6 +218,11 @@ faster-whisper-transcribe --model small --language en --format json input.mp4
 faster-whisper-transcribe --format srt input.wav
 ```
 
+Hermes gateway voice messages use the same local engine through
+`HERMES_LOCAL_STT_COMMAND`. Telegram voice notes arrive as `.ogg`, so `ffmpeg` is
+baked into the image for conversion before transcription. Edge TTS is also baked
+into the Hermes venv for local voice replies.
+
 Default cache paths:
 
 ```bash
@@ -489,8 +494,7 @@ under `$HERMES_CONFIG_VOLUME/.hermes` for unattended server startup.
 
 If Docker Desktop reports `You don't have enough free space in
 /var/cache/apt/archives/`, keep the default build first. Optional heavy packages
-such as `ffmpeg` and `build-essential` are disabled by default; enable them only
-when needed:
+such as `build-essential` are disabled by default; enable them only when needed:
 
 ```bash
 docker build --build-arg INSTALL_OPTIONAL_BUILD_TOOLS=true -t hermes-docker .
@@ -611,9 +615,9 @@ exposed beyond a trusted network:
   upstream installer is still fetched from the official installer URL because it
   does not currently expose a pinned release artifact in this repo; use the smoke
   checks after rebuilding.
-- `ffmpeg` and `build-essential` are optional to keep the default image buildable
-  on tighter Docker Desktop disks. Rebuild with
-  `--build-arg INSTALL_OPTIONAL_BUILD_TOOLS=true` if you need local media/TTS
-  tooling or native package compilation inside the image.
+- `ffmpeg` is baked in because Telegram/Discord voice notes need conversion
+  before local STT. `build-essential` stays optional; rebuild with
+  `--build-arg INSTALL_OPTIONAL_BUILD_TOOLS=true` only if you need native package
+  compilation inside the image.
 - Hermes also ships a Playwright Chromium fallback, but this setup intentionally
   drives the **visible Brave** via CDP so you can watch (and take over) the session.

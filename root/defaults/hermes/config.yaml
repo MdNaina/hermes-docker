@@ -10,6 +10,18 @@
 toolsets:
   - hermes-cli
   - browser
+  - tts
+
+stt:
+  enabled: true
+  provider: local
+  local:
+    model: base
+    language: en
+
+tts:
+  provider: edge
+  auto_tts: false
 
 browser:
   # Attach all browser_* tools (and browser_cdp) to the headed Brave window

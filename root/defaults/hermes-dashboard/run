@@ -7,10 +7,17 @@ case "${HERMES_DASHBOARD:-}" in
 esac
 
 export HERMES_HOME=/config/.hermes
-export HERMES_WEB_DIST="${HERMES_WEB_DIST:-/usr/local/lib/hermes-agent/hermes_cli/web_dist}"
-export HERMES_TUI_DIR="${HERMES_TUI_DIR:-/usr/local/lib/hermes-agent/ui-tui}"
 export HOME=/config
-export PATH="/opt/hermes/.hermes/node/bin:/usr/local/bin:/usr/bin:/bin"
+export PATH="/config/.hermes/node/bin:/opt/hermes/.hermes/node/bin:/usr/local/bin:/usr/bin:/bin"
+
+if [ -n "${HERMES_WEB_DIST:-}" ] && [ ! -d "${HERMES_WEB_DIST}" ]; then
+    echo "[hermes-dashboard] ignoring missing HERMES_WEB_DIST=${HERMES_WEB_DIST}" >&2
+    unset HERMES_WEB_DIST
+fi
+if [ -n "${HERMES_TUI_DIR:-}" ] && [ ! -d "${HERMES_TUI_DIR}" ]; then
+    echo "[hermes-dashboard] ignoring missing HERMES_TUI_DIR=${HERMES_TUI_DIR}" >&2
+    unset HERMES_TUI_DIR
+fi
 
 dash_host="${HERMES_DASHBOARD_HOST:-0.0.0.0}"
 dash_port="${HERMES_DASHBOARD_PORT:-9119}"

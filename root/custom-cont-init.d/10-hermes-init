@@ -39,6 +39,20 @@ if [ ! -f "${HERMES_HOME}/.env" ] && [ -f /defaults/hermes/minimal.env ]; then
     echo "[hermes-init] Seeded minimal env at ${HERMES_HOME}/.env"
 fi
 
+upsert_env_if_missing() {
+    local key="$1"
+    local value="$2"
+    if ! grep -q "^${key}=" "${HERMES_HOME}/.env" 2>/dev/null; then
+        printf '%s=%s\n' "${key}" "${value}" >> "${HERMES_HOME}/.env"
+        echo "[hermes-init] Added missing ${key}"
+    fi
+}
+
+touch "${HERMES_HOME}/.env"
+upsert_env_if_missing HERMES_LOCAL_STT_COMMAND '"faster-whisper-transcribe {input_path} --model {model} --language {language} --format text > {output_dir}/transcript.txt"'
+upsert_env_if_missing HERMES_LOCAL_STT_LANGUAGE en
+chmod 600 "${HERMES_HOME}/.env" 2>/dev/null || true
+
 # Link installer-managed runtime deps (Node for browser tools, managed uv).
 for item in node bin; do
     if [ -e "${BAKED}/${item}" ]; then
